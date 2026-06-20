@@ -109,6 +109,7 @@ def send_wxpusher_digest(
         return send_wxpusher_full_digest(
             digest_date=digest_date,
             markdown_path=markdown_path or html_path.with_suffix(".md"),
+            html_path=html_path,
             dry_run=dry_run,
         )
 
@@ -169,11 +170,13 @@ def send_wxpusher_full_digest(
     *,
     digest_date: str,
     markdown_path: Path,
+    html_path: Path | None = None,
     dry_run: bool,
 ) -> SendResult:
     messages = build_full_digest_messages(
         digest_date=digest_date,
         markdown_path=markdown_path,
+        html_path=html_path,
         max_chars=_int_env("WXPUSHER_FULL_CHUNK_CHARS", DEFAULT_FULL_MESSAGE_LIMIT),
     )
     config = load_wxpusher_config()
@@ -503,6 +506,7 @@ def build_full_digest_messages(
     *,
     digest_date: str,
     markdown_path: Path,
+    html_path: Path | None = None,
     max_chars: int = DEFAULT_FULL_MESSAGE_LIMIT,
 ) -> list[dict[str, str]]:
     if not markdown_path.exists():
@@ -512,6 +516,7 @@ def build_full_digest_messages(
     if not markdown:
         markdown = f"# 每日运动科学文献简报 | {digest_date}\n\n本期没有可推送的正文内容。"
     body = markdown_to_wechat_text(markdown)
+    body = append_digest_location(body, html_path or markdown_path.with_suffix(".html"))
 
     chunks = split_markdown_by_paragraph(body, max_chars=max_chars)
     total = len(chunks)
@@ -531,7 +536,7 @@ def build_full_digest_messages(
                 "title": title,
                 "summary": title[:100],
                 "content": content,
-                "public_url": "",
+                "public_url": build_public_digest_url(html_path or markdown_path.with_suffix(".html")),
                 "digest_location": str(markdown_path),
             }
         )
@@ -575,6 +580,21 @@ def markdown_to_wechat_text(markdown: str) -> str:
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
     text = re.sub(r"^- ", "* ", text, flags=re.MULTILINE)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def append_digest_location(text: str, html_path: Path) -> str:
+    public_url = build_public_digest_url(html_path)
+    digest_location = public_url or str(html_path)
+    lines = [
+        text.strip(),
+        "",
+        "————————————",
+        "【完整 HTML 简报】",
+        digest_location,
+    ]
+    if not public_url:
+        lines.append("提示：手机微信可能无法打开本地路径。建议配置 PUBLIC_DIGEST_BASE_URL。")
+    return "\n".join(lines).strip()
 
 
 def build_public_digest_url(html_path: Path) -> str:

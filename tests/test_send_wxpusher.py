@@ -215,6 +215,35 @@ class WxPusherTests(unittest.TestCase):
         self.assertTrue(any("继续下一条" in call[1]["content"] for call in calls[:-1]))
         self.assertIn("本期结束", calls[-1][1]["content"])
 
+    def test_full_digest_includes_public_html_url(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            md_path = Path(tmpdir) / "2026-06-20-digest.md"
+            html_path = Path(tmpdir) / "2026-06-20-digest.html"
+            md_path.write_text("# 每日运动科学文献简报 | 2026-06-20\n\n正文。", encoding="utf-8")
+
+            with patch.dict(
+                os.environ,
+                {"PUBLIC_DIGEST_BASE_URL": "https://yulixin227-lang.github.io/sports-lit-digest"},
+                clear=False,
+            ):
+                result = send_wxpusher_digest(
+                    papers=[],
+                    metadata={"fetched_count": 0},
+                    digest_date="2026-06-20",
+                    start_date="2026-06-20",
+                    end_date="2026-06-20",
+                    html_path=html_path,
+                    dry_run=True,
+                    wechat_mode="full",
+                    markdown_path=md_path,
+                )
+
+        self.assertIn(
+            "https://yulixin227-lang.github.io/sports-lit-digest/2026-06-20-digest.html",
+            result.preview,
+        )
+        self.assertNotIn("手机微信可能无法打开本地路径", result.preview)
+
 
 if __name__ == "__main__":
     unittest.main()

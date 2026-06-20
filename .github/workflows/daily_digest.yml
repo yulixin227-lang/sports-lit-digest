@@ -14,6 +14,10 @@ on:
         description: "Render without updating seen_papers.json or sending WeChat"
         required: false
         default: "false"
+      force_send:
+        description: "Manual test only: ignore seen cache for this run and do not update it"
+        required: false
+        default: "false"
 
 permissions:
   contents: read
@@ -33,6 +37,7 @@ jobs:
     env:
       DAYS_BACK: ${{ github.event.inputs.days_back || '3' }}
       DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+      FORCE_SEND: ${{ github.event.inputs.force_send || 'false' }}
       NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
       NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
       CROSSREF_MAILTO: ${{ secrets.CROSSREF_MAILTO }}
@@ -69,14 +74,17 @@ jobs:
 
       - name: Run digest
         run: |
+          ARGS=(--days-back "$DAYS_BACK" --send-wechat --wechat-mode smart)
           if [ "$DRY_RUN" = "true" ]; then
-            python -m src.main --days-back "$DAYS_BACK" --dry-run --send-wechat --wechat-mode smart
-          else
-            python -m src.main --days-back "$DAYS_BACK" --send-wechat --wechat-mode smart
+            ARGS+=(--dry-run)
           fi
+          if [ "$FORCE_SEND" = "true" ]; then
+            ARGS+=(--force-send)
+          fi
+          python -m src.main "${ARGS[@]}"
 
       - name: Save seen papers cache
-        if: ${{ env.DRY_RUN != 'true' }}
+        if: ${{ env.DRY_RUN != 'true' && env.FORCE_SEND != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: data/seen_papers.json

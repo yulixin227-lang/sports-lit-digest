@@ -105,6 +105,14 @@ No selected papers; skipped WeChat push.
 
 旧参数 `--wechat-full` 仍可使用，等价于 `--wechat-mode full`。
 
+测试云端或本地推送通路时，如果文章已经被 `data/seen_papers.json` 记录，可以临时加：
+
+```bash
+python -m src.main --days-back 3 --send-wechat --wechat-mode smart --force-send
+```
+
+`--force-send` 会在本次运行中忽略 seen 文件参与筛选，并且不会写回 `data/seen_papers.json`；它只适合测试重复推送，不建议用于日常定时任务。
+
 预留 Server酱通道参数如下，但当前版本只实现 WxPusher，Server酱会返回 TODO warning：
 
 ```bash
@@ -342,13 +350,14 @@ CROSSREF_MAILTO
 如果用 SPT，配置 `WXPUSHER_SPT_ENABLED=true` 和 `WXPUSHER_SPT_URL` 即可；如果用标准发送，配置 `WXPUSHER_APP_TOKEN` 和 `WXPUSHER_UIDS`。如果两套都配置，程序优先使用 SPT。
 
 5. 手动测试：打开 GitHub 仓库的 `Actions -> Daily Sports Lit Digest -> Run workflow`，保持默认 `days_back=3`，可以先把 `dry_run` 设为 `true` 验证生成和 Pages 部署，再正式运行。
-6. 验证部署：workflow 完成后，打开 `Actions` 运行详情，查看 `Deploy to GitHub Pages` 的 URL，或直接访问：
+6. 如果要测试云端微信推送通路，并且最近 3 天的文章已经在 `seen_papers.json` 里导致 `Selected: 0`，可以手动运行 workflow 时把 `force_send` 设为 `true`。这会在本次运行中忽略 seen cache，允许重复推送符合条件的文章，但不会保存或破坏正式 seen cache。定时每日运行不会使用 `force_send`，仍然正常去重。
+7. 验证部署：workflow 完成后，打开 `Actions` 运行详情，查看 `Deploy to GitHub Pages` 的 URL，或直接访问：
 
 ```text
 https://<你的GitHub用户名>.github.io/sports-lit-digest/YYYY-MM-DD-digest.html
 ```
 
-7. 微信推送里的完整简报链接来自 `PUBLIC_DIGEST_BASE_URL + /YYYY-MM-DD-digest.html`。如果 `PUBLIC_DIGEST_BASE_URL` 没有配置，程序会继续显示本地 HTML 路径，并提示“手机微信可能无法打开本地路径”。
+8. 微信推送里的完整简报链接来自 `PUBLIC_DIGEST_BASE_URL + /YYYY-MM-DD-digest.html`。如果 `PUBLIC_DIGEST_BASE_URL` 没有配置，程序会继续显示本地 HTML 路径，并提示“手机微信可能无法打开本地路径”。
 
 ## 后续接入分发渠道
 

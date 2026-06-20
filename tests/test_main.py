@@ -1,6 +1,6 @@
 import unittest
 
-from src.main import resolve_wechat_mode, should_skip_wechat_push
+from src.main import empty_seen, resolve_wechat_mode, should_skip_wechat_push
 
 
 class MainFlowTests(unittest.TestCase):
@@ -44,6 +44,10 @@ class MainFlowTests(unittest.TestCase):
                 selected_count=0,
             )
         )
+
+    def test_empty_seen_for_force_send(self):
+        seen = empty_seen()
+        self.assertEqual(seen, {"dois": set(), "pmids": set()})
 
 
 if __name__ == "__main__":

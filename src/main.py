@@ -62,7 +62,8 @@ def main(argv: list[str] | None = None) -> int:
     min_score = int_env("DIGEST_MIN_SCORE", int(scoring_config.get("threshold", 70)))
     max_papers = int_env("DIGEST_MAX_PAPERS", int(scoring_config.get("max_papers", 5)))
     skip_empty_push = bool_env("SKIP_EMPTY_PUSH", True)
-    selected = select_top_papers(scored, seen=seen, min_score=min_score, max_papers=max_papers)
+    selection_seen = empty_seen() if args.force_send else seen
+    selected = select_top_papers(scored, seen=selection_seen, min_score=min_score, max_papers=max_papers)
     summaries = summarize_papers(selected, keywords_config)
 
     md_path, html_path = render_digest(
@@ -80,6 +81,7 @@ def main(argv: list[str] | None = None) -> int:
             "min_score": min_score,
             "max_papers": max_papers,
             "skip_empty_push": skip_empty_push,
+            "force_send": args.force_send,
             "warnings": warnings,
         },
     )
@@ -92,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
         "min_score": min_score,
         "max_papers": max_papers,
         "skip_empty_push": skip_empty_push,
+        "force_send": args.force_send,
         "warnings": warnings,
     }
     requested_wechat_mode = "full" if args.wechat_full else args.wechat_mode
@@ -162,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"WxPusher response: {json.dumps(_sanitize_push_response(send_result.response), ensure_ascii=False)}")
         warnings.extend(send_result.warnings)
 
-    if not args.dry_run:
+    if not args.dry_run and not args.force_send:
         for paper in selected:
             add_seen_paper(seen, paper)
         write_seen(seen_path, seen)
@@ -172,6 +175,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"HTML: {html_path}")
     if args.dry_run:
         print("Seen file unchanged because --dry-run was used.")
+    elif args.force_send:
+        print("Seen file unchanged because --force-send was used.")
     for warning in warnings:
         print(f"Warning: {warning}")
 
@@ -197,6 +202,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="Render outputs but do not update data/seen_papers.json.",
+    )
+    parser.add_argument(
+        "--force-send",
+        action="store_true",
+        help="Ignore seen_papers.json for this run and do not update it. Intended for manual cloud push tests.",
     )
     parser.add_argument(
         "--send-wechat",
@@ -227,6 +237,10 @@ def resolve_date(value: str) -> date:
     if value.lower() == "today":
         return today_in_configured_timezone()
     return datetime.strptime(value, "%Y-%m-%d").date()
+
+
+def empty_seen() -> dict[str, set[str]]:
+    return {"dois": set(), "pmids": set()}
 
 
 def should_skip_wechat_push(
