@@ -1,0 +1,27 @@
+{
+  "keywords": [
+    {"term": "exercise physiology", "zh": "运动生理学", "aliases": ["exercise physiological"], "weight": 1.0},
+    {"term": "sports medicine", "zh": "运动医学", "aliases": ["sport medicine"], "weight": 1.0},
+    {"term": "rehabilitation", "zh": "康复", "aliases": ["rehab"], "weight": 1.0},
+    {"term": "physical therapy", "zh": "物理治疗", "aliases": ["physiotherapy"], "weight": 1.0},
+    {"term": "VO2max", "zh": "最大摄氧量", "aliases": ["VO2 max", "V̇O2max", "maximal oxygen uptake"], "weight": 1.0},
+    {"term": "cardiorespiratory fitness", "zh": "心肺适能", "aliases": ["CRF"], "weight": 1.0},
+    {"term": "HIIT", "zh": "高强度间歇训练", "aliases": ["high intensity interval training", "high-intensity interval training"], "weight": 1.0},
+    {"term": "HIFT", "zh": "高强度功能训练", "aliases": ["high intensity functional training", "high-intensity functional training"], "weight": 1.0},
+    {"term": "MICT", "zh": "中等强度持续训练", "aliases": ["moderate intensity continuous training", "moderate-intensity continuous training"], "weight": 1.0},
+    {"term": "resistance training", "zh": "抗阻训练", "aliases": ["strength training"], "weight": 1.0},
+    {"term": "sleep", "zh": "睡眠", "aliases": ["sleep quality", "insomnia"], "weight": 1.0},
+    {"term": "HRV", "zh": "心率变异性", "aliases": ["heart rate variability"], "weight": 1.0},
+    {"term": "anxiety", "zh": "焦虑", "aliases": ["anxious"], "weight": 0.9},
+    {"term": "depression", "zh": "抑郁", "aliases": ["depressive symptoms"], "weight": 0.9},
+    {"term": "electromyography", "zh": "肌电图", "aliases": ["EMG"], "weight": 1.0},
+    {"term": "sEMG", "zh": "表面肌电", "aliases": ["surface electromyography", "surface EMG"], "weight": 1.0},
+    {"term": "biomechanics", "zh": "生物力学", "aliases": ["biomechanical"], "weight": 1.0},
+    {"term": "neuromuscular", "zh": "神经肌肉", "aliases": ["neuro-muscular"], "weight": 1.0},
+    {"term": "musculoskeletal", "zh": "肌骨系统", "aliases": ["musculo-skeletal"], "weight": 1.0},
+    {"term": "exoskeleton", "zh": "外骨骼", "aliases": ["exosuit"], "weight": 1.0},
+    {"term": "gait", "zh": "步态", "aliases": ["walking biomechanics"], "weight": 1.0},
+    {"term": "tendon", "zh": "肌腱", "aliases": ["tendinopathy"], "weight": 1.0},
+    {"term": "muscle injury", "zh": "肌肉损伤", "aliases": ["muscle damage", "hamstring injury"], "weight": 1.0}
+  ]
+}

@@ -1,0 +1,66 @@
+# 每日运动科学文献简报 | {{ date }}
+
+## 今日概览
+
+* 检索范围：{{ overview.start_date }} 至 {{ overview.end_date }}
+* 初筛文章：{{ overview.fetched_count }} 篇
+* 最终推荐：{{ overview.selected_count }} 篇
+* 本期重点方向：{{ overview.focus_topics }}
+{% if overview.top_pick.index %}
+* 今日最值得读：第 {{ overview.top_pick.index }} 篇，{{ overview.top_pick.reason }}
+{% else %}
+* 今日最值得读：{{ overview.top_pick.reason }}
+{% endif %}
+
+{% if metadata.dry_run %}
+> dry-run：本次不会更新 `data/seen_papers.json`。
+{% endif %}
+{% if metadata.warnings %}
+> 运行提示：部分外部数据源补全失败，不影响已生成内容；详见命令行 warning。
+{% endif %}
+
+{% if not papers %}
+今天没有达到评分阈值的新增文章。
+
+这不代表相关领域没有新文献，只表示在当前期刊白名单、关键词和评分阈值下没有入选。
+{% endif %}
+
+{% for paper in papers %}
+## {{ loop.index }}. {{ paper.chinese_title }}
+
+**英文原题**：{{ paper.title }}
+
+**期刊 / 年份 / DOI / PMID**：{{ paper.journal }} / {{ paper.year }} / {{ paper.doi }} / {{ paper.pmid }}
+
+**文章类型**：{{ paper.article_type_label }}
+
+**推荐指数**：{{ paper.stars }}（{{ paper.recommendation_index }}）
+
+**质量评分**：{{ paper.score }}/100
+
+**关键词**：{{ paper.keywords_display }}
+
+**链接**：{{ paper.link }}
+
+**证据强度提醒**：{{ paper.evidence_strength }}
+
+{% for section in paper.body_sections %}
+**{{ section.label }}**  
+{{ section.value }}
+
+{% endfor %}
+---
+
+{% endfor %}
+
+## 今日术语小词典
+
+{% if term_dictionary %}
+{% for item in term_dictionary %}
+* **{{ item.term }}**：{{ item.definition }}
+{% endfor %}
+{% else %}
+今天入选文章没有触发需要额外解释的英文缩写或术语。
+{% endif %}
+
+生成时间：{{ generated_at }}

@@ -1,0 +1,79 @@
+{
+  "threshold": 70,
+  "max_papers": 5,
+  "weights": {
+    "journal": 30,
+    "article_type": 20,
+    "method_quality": 20,
+    "keyword_match": 20,
+    "readability": 10
+  },
+  "journal": {
+    "unknown_score": 0
+  },
+  "article_type": {
+    "base_score": 8,
+    "preferred": [
+      {"term": "randomized controlled trial", "score": 20},
+      {"term": "randomised controlled trial", "score": 20},
+      {"term": "rct", "score": 19},
+      {"term": "systematic review", "score": 19},
+      {"term": "meta-analysis", "score": 20},
+      {"term": "meta analysis", "score": 20},
+      {"term": "clinical trial", "score": 18},
+      {"term": "controlled trial", "score": 18},
+      {"term": "human study", "score": 16},
+      {"term": "cohort study", "score": 15},
+      {"term": "large sample", "score": 16}
+    ],
+    "downgrade": [
+      {"term": "protocol", "penalty": 16},
+      {"term": "letter", "penalty": 14},
+      {"term": "editorial", "penalty": 14},
+      {"term": "corrigendum", "penalty": 18},
+      {"term": "commentary", "penalty": 14},
+      {"term": "case report", "penalty": 8},
+      {"term": "conference abstract", "penalty": 12}
+    ]
+  },
+  "method_quality": {
+    "base_with_abstract": 4,
+    "positive_terms": [
+      {"term": "randomized", "points": 4},
+      {"term": "randomised", "points": 4},
+      {"term": "controlled", "points": 3},
+      {"term": "double blind", "points": 3},
+      {"term": "single blind", "points": 2},
+      {"term": "prospective", "points": 3},
+      {"term": "multicenter", "points": 3},
+      {"term": "multi-center", "points": 3},
+      {"term": "systematic review", "points": 4},
+      {"term": "meta-analysis", "points": 5},
+      {"term": "confidence interval", "points": 2},
+      {"term": "effect size", "points": 2},
+      {"term": "intention-to-treat", "points": 2},
+      {"term": "human", "points": 2},
+      {"term": "participants", "points": 2},
+      {"term": "patients", "points": 2},
+      {"term": "athletes", "points": 2}
+    ],
+    "negative_terms": [
+      {"term": "protocol", "points": 8},
+      {"term": "pilot", "points": 3},
+      {"term": "feasibility", "points": 3},
+      {"term": "case report", "points": 4}
+    ],
+    "sample_size_regex": "\\b(n\\s*=\\s*\\d+|\\d+\\s+(participants|patients|adults|athletes|subjects|children|older adults))\\b",
+    "sample_size_points": 4
+  },
+  "keyword_match": {
+    "target_matches": 4
+  },
+  "readability": {
+    "abstract_min_chars": 600,
+    "abstract_full_score": 6,
+    "abstract_partial_score": 3,
+    "doi_points": 2,
+    "structured_abstract_points": 2
+  }
+}
