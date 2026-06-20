@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -37,7 +38,115 @@ def render_digest(
     html_path = output_dir / f"{digest_date}-digest.html"
     md_path.write_text(md_text, encoding="utf-8")
     html_path.write_text(html_text, encoding="utf-8")
+    _write_index(output_dir, latest_date=digest_date, latest_overview=overview)
     return md_path, html_path
+
+
+def _write_index(output_dir: Path, latest_date: str, latest_overview: dict[str, Any]) -> Path:
+    entries = _collect_digest_entries(output_dir, latest_date, latest_overview)
+    latest = entries[0] if entries else {
+        "date": latest_date,
+        "file": f"{latest_date}-digest.html",
+        "selected_count": latest_overview.get("selected_count", 0),
+        "focus_topics": latest_overview.get("focus_topics", "暂无明确重点方向"),
+    }
+    index_path = output_dir / "index.html"
+    index_path.write_text(_index_html(entries, latest), encoding="utf-8")
+    return index_path
+
+
+def _collect_digest_entries(
+    output_dir: Path,
+    latest_date: str,
+    latest_overview: dict[str, Any],
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for html_file in output_dir.glob("*-digest.html"):
+        match = re.match(r"(\d{4}-\d{2}-\d{2})-digest\.html$", html_file.name)
+        if not match:
+            continue
+        item_date = match.group(1)
+        if item_date == latest_date:
+            selected_count = latest_overview.get("selected_count", 0)
+            focus_topics = latest_overview.get("focus_topics", "暂无明确重点方向")
+        else:
+            selected_count, focus_topics = _read_digest_summary(html_file.with_suffix(".md"))
+        entries.append(
+            {
+                "date": item_date,
+                "file": html_file.name,
+                "selected_count": selected_count,
+                "focus_topics": focus_topics,
+            }
+        )
+    return sorted(entries, key=lambda item: item["date"], reverse=True)
+
+
+def _read_digest_summary(md_path: Path) -> tuple[int | str, str]:
+    if not md_path.exists():
+        return "未知", "暂无记录"
+    text = md_path.read_text(encoding="utf-8", errors="replace")
+    selected_match = re.search(r"最终推荐：\s*(\d+)\s*篇", text)
+    focus_match = re.search(r"本期重点方向：\s*(.+)", text)
+    selected_count: int | str = int(selected_match.group(1)) if selected_match else "未知"
+    focus_topics = focus_match.group(1).strip() if focus_match else "暂无记录"
+    return selected_count, focus_topics
+
+
+def _index_html(entries: list[dict[str, Any]], latest: dict[str, Any]) -> str:
+    history_items = "\n".join(
+        "<li>"
+        f"<a href='{html.escape(item['file'])}'>{html.escape(item['date'])}</a>"
+        f"<span>最终推荐 {html.escape(str(item['selected_count']))} 篇</span>"
+        f"<span>{html.escape(str(item['focus_topics']))}</span>"
+        "</li>"
+        for item in entries
+    )
+    latest_file = html.escape(str(latest["file"]))
+    latest_date = html.escape(str(latest["date"]))
+    generated_at = html.escape(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    return f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>每日运动科学文献简报</title>
+  <style>
+    body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans SC',sans-serif;line-height:1.75;max-width:920px;margin:40px auto;padding:0 20px;color:#202124;background:#fff}}
+    h1{{font-size:30px;line-height:1.35;margin-bottom:10px}}
+    .latest{{border:1px solid #d0d7de;border-radius:8px;padding:18px 20px;background:#f6f8fa;margin:24px 0}}
+    .latest a{{font-size:20px;font-weight:700}}
+    ul{{list-style:none;padding:0;margin:0}}
+    li{{border-top:1px solid #d0d7de;padding:14px 0;display:grid;grid-template-columns:150px 140px 1fr;gap:14px;align-items:start}}
+    a{{color:#0969da;text-decoration:none}}a:hover{{text-decoration:underline}}
+    .meta{{color:#57606a;font-size:14px}}
+    @media(max-width:720px){{li{{display:block}}li span{{display:block;margin-top:4px}}}}
+  </style>
+  <script>
+    window.setTimeout(function(){{
+      var params = new URLSearchParams(window.location.search);
+      if (!params.has('stay')) {{
+        window.location.href = '{latest_file}';
+      }}
+    }}, 4500);
+  </script>
+</head>
+<body>
+  <h1>每日运动科学文献简报</h1>
+  <p class="meta">页面会在数秒后自动跳转到最新简报；如需停留在历史列表，可在地址后加 <code>?stay=1</code>。</p>
+  <section class="latest">
+    <p class="meta">最新简报</p>
+    <a href="{latest_file}">{latest_date} 文献简报</a>
+    <p>最终推荐 {html.escape(str(latest['selected_count']))} 篇｜{html.escape(str(latest['focus_topics']))}</p>
+  </section>
+  <h2>历史简报</h2>
+  <ul>
+    {history_items}
+  </ul>
+  <p class="meta">更新时间：{generated_at}</p>
+</body>
+</html>
+"""
 
 
 def _build_overview(

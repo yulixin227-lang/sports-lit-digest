@@ -425,7 +425,6 @@ def build_wechat_message(
     digest_location = public_url or str(html_path)
     overview = _build_overview(papers, metadata, start_date, end_date)
     warnings = metadata.get("warnings") or []
-    dictionary_terms = _collect_dictionary_terms(papers)
 
     title = f"每日运动科学文献简报 | {digest_date}"
     lines = [
@@ -450,10 +449,7 @@ def build_wechat_message(
                     "————————————",
                     f"【文章 {index}】",
                     str(paper.get("chinese_title") or "标题待补全"),
-                    f"英文原题：{paper.get('english_title') or paper.get('title') or '摘要中未提供'}",
-                    f"期刊/年份：{paper.get('journal', '摘要中未提供')} / {paper.get('year', '摘要中未提供')}",
-                    f"DOI：{paper.get('doi') or '摘要中未提供'}",
-                    f"PMID：{paper.get('pmid') or '摘要中未提供'}",
+                    f"英文原题：{_truncate_text(paper.get('english_title') or paper.get('title') or '摘要中未提供', 96)}",
                     f"文章类型：{paper.get('article_type_label', '类型待补全')}",
                     f"推荐指数：{paper.get('stars') or paper.get('recommendation_index', '待评估')}",
                     f"质量评分：{paper.get('score', '待评估')}/100",
@@ -462,10 +458,10 @@ def build_wechat_message(
                     str(paper.get("one_sentence_conclusion") or "摘要中未提供。"),
                     "",
                     "【证据强度提醒】",
-                    str(paper.get("evidence_strength") or "摘要中未提供。"),
+                    _brief_text(paper.get("evidence_strength") or "摘要中未提供。", 90),
                     "",
-                    "【我的判断】",
-                    str(paper.get("my_judgment") or "摘要中未提供。"),
+                    "【为什么值得看】",
+                    _brief_text(_paper_section(paper, "为什么值得看") or paper.get("top_pick_reason") or "摘要中未提供。", 110),
                     "",
                 ]
             )
@@ -473,13 +469,17 @@ def build_wechat_message(
         lines.append("今天没有达到评分阈值的新增文章。")
         lines.append("")
 
-    if dictionary_terms:
-        lines.extend(["————————————", "【术语小词典】"])
-        for item in dictionary_terms[:6]:
-            lines.append(f"* {item['term']}：{item['definition']}")
-        lines.append("")
-
-    lines.extend(["————————————", "【完整简报】", digest_location])
+    history_location = build_public_index_url(html_path) or str(html_path.parent / "index.html")
+    lines.extend(
+        [
+            "————————————",
+            "【阅读全文】",
+            _format_wechat_link(digest_location),
+            "",
+            "【历史简报】",
+            _format_wechat_link(history_location),
+        ]
+    )
     if not public_url:
         lines.append("提示：手机微信可能无法打开本地路径。建议后续配置 PUBLIC_DIGEST_BASE_URL，并用 GitHub Pages 或 Cloudflare Pages 托管 outputs。")
 
@@ -585,12 +585,16 @@ def markdown_to_wechat_text(markdown: str) -> str:
 def append_digest_location(text: str, html_path: Path) -> str:
     public_url = build_public_digest_url(html_path)
     digest_location = public_url or str(html_path)
+    history_location = build_public_index_url(html_path) or str(html_path.parent / "index.html")
     lines = [
         text.strip(),
         "",
         "————————————",
         "【完整 HTML 简报】",
-        digest_location,
+        _format_wechat_link(digest_location),
+        "",
+        "【历史简报】",
+        _format_wechat_link(history_location),
     ]
     if not public_url:
         lines.append("提示：手机微信可能无法打开本地路径。建议配置 PUBLIC_DIGEST_BASE_URL。")
@@ -602,6 +606,13 @@ def build_public_digest_url(html_path: Path) -> str:
     if not base_url:
         return ""
     return f"{base_url}/{html_path.name}"
+
+
+def build_public_index_url(html_path: Path) -> str:
+    base_url = os.getenv("PUBLIC_DIGEST_BASE_URL", "").strip().rstrip("/")
+    if not base_url:
+        return ""
+    return f"{base_url}/"
 
 
 def _build_overview(
@@ -646,6 +657,34 @@ def _collect_dictionary_terms(papers: list[dict[str, Any]]) -> list[dict[str, st
                 seen.add(key)
                 terms.append({"term": term, "definition": definition})
     return terms
+
+
+def _paper_section(paper: dict[str, Any], label: str) -> str:
+    for section in paper.get("body_sections") or []:
+        if section.get("label") == label:
+            return str(section.get("value") or "").strip()
+    return ""
+
+
+def _brief_text(value: Any, limit: int) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) <= limit:
+        return text
+    sentence_match = re.match(r"^(.{20,}?[。！？.!?])", text)
+    if sentence_match and len(sentence_match.group(1)) <= limit:
+        return sentence_match.group(1)
+    return _truncate_text(text, limit)
+
+
+def _truncate_text(value: Any, limit: int) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _format_wechat_link(url: str) -> str:
+    return f"[{url}]({url})"
 
 
 def _post_json(url: str, payload: dict[str, Any], timeout: int = 20) -> dict[str, Any]:

@@ -77,16 +77,16 @@ python -m src.main --days-back 3 --dry-run
 
 dry-run 仍会生成 `outputs/YYYY-MM-DD-digest.md` 和 `outputs/YYYY-MM-DD-digest.html`，方便检查排版和内容；区别是不会把文章写入 `data/seen_papers.json`。
 
-dry-run 预览微信推送内容，不真实发送。默认使用 `smart` 智能模式：
+dry-run 预览微信推送内容，不真实发送。日常自动推送默认使用 `short` 模式：
 
 ```bash
-python -m src.main --days-back 3 --dry-run --send-wechat --wechat-mode smart
+python -m src.main --days-back 3 --dry-run --send-wechat --wechat-mode short
 ```
 
 正式生成并发送微信摘要：
 
 ```bash
-python -m src.main --days-back 3 --send-wechat --wechat-mode smart
+python -m src.main --days-back 3 --send-wechat --wechat-mode short
 ```
 
 如果 `SKIP_EMPTY_PUSH=true`，当最终推荐为 0 篇时，程序仍会生成空简报文件，但不会发送空微信消息，并在命令行提示：
@@ -99,16 +99,16 @@ No selected papers; skipped WeChat push.
 
 微信推送支持三种模式：
 
-- `--wechat-mode smart`：默认模式。最终推荐 0 篇时不推送；1 篇时推完整正文；2 篇及以上时推短摘要，避免微信消息过长。
-- `--wechat-mode short`：只推今日概览、每篇文章的一句话结论和完整简报链接，适合日常自动推送。
+- `--wechat-mode short`：日常默认模式。只推今日概览、每篇文章的标题、简短英文原题、文章类型、推荐指数、质量评分、一句话结论、简短证据提醒、为什么值得看，以及阅读全文/历史简报链接。
 - `--wechat-mode full`：推送完整 Markdown digest 正文；内容过长时会按段落或文章边界自动分段，并在每段末尾标注“继续下一条”或“本期结束”。
+- `--wechat-mode smart`：保留为手动模式。最终推荐 0 篇时不推送；1 篇时推完整正文；2 篇及以上时推短摘要。
 
 旧参数 `--wechat-full` 仍可使用，等价于 `--wechat-mode full`。
 
 测试云端或本地推送通路时，如果文章已经被 `data/seen_papers.json` 记录，可以临时加：
 
 ```bash
-python -m src.main --days-back 3 --send-wechat --wechat-mode smart --force-send
+python -m src.main --days-back 3 --send-wechat --wechat-mode short --force-send
 ```
 
 `--force-send` 会在本次运行中忽略 seen 文件参与筛选，并且不会写回 `data/seen_papers.json`；它只适合测试重复推送，不建议用于日常定时任务。
@@ -212,7 +212,7 @@ python -m src.main --days-back 3 --dry-run --send-wechat
 命令行会打印将要发送到微信的摘要内容。如果内容正常，再正式发送：
 
 ```bash
-python -m src.main --days-back 3 --send-wechat --wechat-mode smart
+python -m src.main --days-back 3 --send-wechat --wechat-mode short
 ```
 
 如果 SPT 和标准发送都没有配置，程序会跳过推送并输出 warning，不会让 digest 生成失败。推送失败也不会影响 Markdown/HTML 简报生成。
@@ -281,13 +281,13 @@ schedule:
 运行时会安装依赖，并默认执行：
 
 ```bash
-python -m src.main --days-back 3 --send-wechat --wechat-mode smart
+python -m src.main --days-back 3 --send-wechat --wechat-mode short
 ```
 
 如果手动触发时选择 dry-run，则执行：
 
 ```bash
-python -m src.main --days-back 3 --dry-run --send-wechat --wechat-mode smart
+python -m src.main --days-back 3 --dry-run --send-wechat --wechat-mode short
 ```
 
 workflow 会把 `outputs/` 作为 GitHub Pages artifact 上传并部署。部署成功后，完整 HTML 简报可以通过下面的格式访问：
@@ -295,6 +295,14 @@ workflow 会把 `outputs/` 作为 GitHub Pages artifact 上传并部署。部署
 ```text
 https://<你的GitHub用户名>.github.io/sports-lit-digest/YYYY-MM-DD-digest.html
 ```
+
+GitHub Pages 首页地址为：
+
+```text
+https://<你的GitHub用户名>.github.io/sports-lit-digest/
+```
+
+首页 `outputs/index.html` 会在每次生成 digest 时自动更新，显示最新简报链接和历史简报列表。微信 short 模式末尾会同时放【阅读全文】和【历史简报】两个链接。
 
 如果你的仓库名不是 `sports-lit-digest`，最后一段路径要换成实际仓库名。`SKIP_EMPTY_PUSH=true` 是默认值：如果当天 3 天窗口内没有新的入选文章，会生成 empty digest，但不会推送空微信消息。去重文件 `data/seen_papers.json` 在 workflow 中通过 GitHub Actions cache 恢复和保存，避免每天查最近 3 天时重复推送同一篇文章。
 
@@ -349,7 +357,7 @@ CROSSREF_MAILTO
 
 如果用 SPT，配置 `WXPUSHER_SPT_ENABLED=true` 和 `WXPUSHER_SPT_URL` 即可；如果用标准发送，配置 `WXPUSHER_APP_TOKEN` 和 `WXPUSHER_UIDS`。如果两套都配置，程序优先使用 SPT。
 
-5. 手动测试：打开 GitHub 仓库的 `Actions -> Daily Sports Lit Digest -> Run workflow`，保持默认 `days_back=3`，可以先把 `dry_run` 设为 `true` 验证生成和 Pages 部署，再正式运行。
+5. 手动测试：打开 GitHub 仓库的 `Actions -> Daily Sports Lit Digest -> Run workflow`，保持默认 `days_back=3`，可以先把 `dry_run` 设为 `true` 验证生成和 Pages 部署，再正式运行。日常建议保持 `wechat_mode=short`；如果你主动想看全文，可以手动改成 `wechat_mode=full`；如果想测试智能策略，可以改成 `wechat_mode=smart`。
 6. 如果要测试云端微信推送通路，并且最近 3 天的文章已经在 `seen_papers.json` 里导致 `Selected: 0`，可以手动运行 workflow 时把 `force_send` 设为 `true`。这会在本次运行中忽略 seen cache，允许重复推送符合条件的文章，但不会保存或破坏正式 seen cache。定时每日运行不会使用 `force_send`，仍然正常去重。
 7. 验证部署：workflow 完成后，打开 `Actions` 运行详情，查看 `Deploy to GitHub Pages` 的 URL，或直接访问：
 
