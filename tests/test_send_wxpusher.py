@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.send_wxpusher import (
+    WXPUSHER_SEND_URL,
     WXPUSHER_SIMPLE_SEND_URL,
     build_wechat_message,
     extract_spt_from_url,
@@ -96,7 +97,7 @@ class WxPusherTests(unittest.TestCase):
         self.assertEqual(extract_spt_from_url(url), "SPT_abc123xyz")
         self.assertEqual(extract_spt_from_url("SPT_directToken"), "SPT_directToken")
 
-    def test_spt_dry_run_has_priority_over_standard_mode(self):
+    def test_standard_mode_has_priority_over_spt_when_configured(self):
         with patch.dict(
             os.environ,
             {
@@ -104,7 +105,8 @@ class WxPusherTests(unittest.TestCase):
                 "WXPUSHER_SPT_URL": "https://wxpusher.zjiecode.com/api/send/message/SPT_abc123xyz/Hello",
                 "WXPUSHER_ENABLED": "true",
                 "WXPUSHER_APP_TOKEN": "AT_standard",
-                "WXPUSHER_UIDS": "UID_standard",
+                "WXPUSHER_UIDS": "",
+                "WXPUSHER_TOPIC_IDS": "123,456",
                 "PUBLIC_DIGEST_BASE_URL": "",
             },
             clear=False,
@@ -119,9 +121,48 @@ class WxPusherTests(unittest.TestCase):
                 dry_run=True,
             )
 
-        self.assertEqual(result.mode, "spt")
+        self.assertEqual(result.mode, "standard")
         self.assertIn("SPT_ab", result.target_spt)
+        self.assertEqual(result.target_topic_ids, [123, 456])
         self.assertFalse(result.sent)
+
+    def test_standard_send_supports_topic_ids_without_uids(self):
+        calls = []
+
+        def fake_post_json(url, payload):
+            calls.append((url, payload))
+            return {"code": 1000, "success": True, "data": [{"code": 1000, "topicId": 123}]}
+
+        with patch.dict(
+            os.environ,
+            {
+                "WXPUSHER_SPT_ENABLED": "false",
+                "WXPUSHER_SPT_URL": "",
+                "WXPUSHER_ENABLED": "true",
+                "WXPUSHER_APP_TOKEN": "AT_standard",
+                "WXPUSHER_UIDS": "",
+                "WXPUSHER_TOPIC_IDS": "123,456",
+                "PUBLIC_DIGEST_BASE_URL": "https://example.com/digests",
+            },
+            clear=False,
+        ):
+            with patch("src.send_wxpusher._post_json", side_effect=fake_post_json):
+                result = send_wxpusher_digest(
+                    papers=[],
+                    metadata={"fetched_count": 0},
+                    digest_date="2026-06-20",
+                    start_date="2026-06-20",
+                    end_date="2026-06-20",
+                    html_path=Path("outputs/2026-06-20-digest.html"),
+                    dry_run=False,
+                )
+
+        self.assertTrue(result.sent)
+        self.assertEqual(result.mode, "standard")
+        self.assertEqual(calls[0][0], WXPUSHER_SEND_URL)
+        self.assertEqual(calls[0][1]["appToken"], "AT_standard")
+        self.assertEqual(calls[0][1]["topicIds"], [123, 456])
+        self.assertNotIn("uids", calls[0][1])
 
     def test_spt_send_uses_simple_push_post_payload(self):
         calls = []

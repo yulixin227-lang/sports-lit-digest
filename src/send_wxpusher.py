@@ -405,10 +405,10 @@ def extract_spt_from_url(value: str) -> str:
 
 
 def _select_wxpusher_mode(config: dict[str, Any]) -> str:
-    if config["spt_enabled"] and config["spt"]:
-        return "spt"
     if config["enabled"] and config["app_token"] and (config["uids"] or config["topic_ids"]):
         return "standard"
+    if config["spt_enabled"] and config["spt"]:
+        return "spt"
     return ""
 
 

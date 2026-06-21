@@ -53,7 +53,7 @@ SERVERCHAN_SENDKEY=
 
 `NCBI_EMAIL` 建议填写真实邮箱，符合 NCBI E-utilities 的礼貌调用习惯。`SEMANTIC_SCHOLAR_API_KEY` 可选，没有 key 时会尝试使用公开限流接口。
 
-`WXPUSHER_SPT_ENABLED=false` 和 `WXPUSHER_ENABLED=false` 是默认值，避免本地调试时误发微信。只有配置了可用的 SPT 或标准发送参数，并且命令行传入 `--send-wechat` 时，才会真实发送。若 SPT 和标准发送都配置，优先使用 SPT。
+`WXPUSHER_SPT_ENABLED=false` 和 `WXPUSHER_ENABLED=false` 是默认值，避免本地调试时误发微信。只有配置了可用的标准发送参数或 SPT，并且命令行传入 `--send-wechat` 时，才会真实发送。若标准发送和 SPT 都配置，优先使用标准发送，SPT 作为备用通道。
 
 ## 如何运行
 
@@ -140,15 +140,16 @@ PUBLIC_DIGEST_BASE_URL=
 
 SPT 适合个人测试和自己给自己推送：不需要创建应用、不需要 appToken、不需要 UID。它的缺点是管理能力弱，不适合多人订阅、用户管理、回调或长期产品化分发。
 
-### 2. 标准发送：APP_TOKEN + UID
+### 2. 标准发送：APP_TOKEN + UID 或 Topic
 
-如果你以后能进入“应用管理”，或者要更稳定地长期使用，可以切换到标准发送模式。打开 [WxPusher 管理后台](https://wxpusher.zjiecode.com/admin/)，创建应用，拿到 `appToken`，再让自己的微信账号关注应用并获取 UID。
+如果你已经能进入“应用管理”，或者要更稳定地长期使用，可以切换到标准发送模式。打开 [WxPusher 管理后台](https://wxpusher.zjiecode.com/admin/)，创建应用，拿到 `appToken`。`appToken` 是敏感信息，只能写入本地 `.env` 或 GitHub Secrets，不要写进代码、README 或 workflow。
 
 ```env
 WXPUSHER_SPT_ENABLED=false
 WXPUSHER_ENABLED=true
 WXPUSHER_APP_TOKEN=你的_app_token
 WXPUSHER_UIDS=UID_xxx
+WXPUSHER_TOPIC_IDS=
 ```
 
 获取 UID 的常见方式：
@@ -175,9 +176,33 @@ WXPUSHER_UIDS=UID_xxx,UID_yyy
 WXPUSHER_TOPIC_IDS=123,456
 ```
 
+`WXPUSHER_TOPIC_IDS` 支持多个 topicId，用英文逗号分隔。只要配置了：
+
+```env
+WXPUSHER_ENABLED=true
+WXPUSHER_APP_TOKEN=你的_app_token
+WXPUSHER_TOPIC_IDS=123
+WXPUSHER_UIDS=
+```
+
+程序就会使用标准接口向 Topic 推送，不需要配置导师的 UID。若同时配置 `WXPUSHER_UIDS` 和 `WXPUSHER_TOPIC_IDS`，同一条 digest 会同时发给指定 UID 和 Topic 订阅者。
+
+### 3. 导师订阅 Topic
+
+Topic 适合让导师或同学扫码订阅后自动收到每日简报，而不需要你收集每个人的 UID。
+
+推荐流程：
+
+1. 在 WxPusher 应用后台创建或找到用于 `sports-lit-digest` 的 Topic。
+2. 复制该 Topic 的订阅二维码或订阅链接，发给导师扫码订阅。
+3. 在本地 `.env` 或 GitHub Secrets 中填写 `WXPUSHER_TOPIC_IDS`。
+4. 日常 GitHub Actions 运行时，程序会使用 `APP_TOKEN + TOPIC_IDS` 标准发送到该 Topic。
+
+导师只需要订阅 Topic；除非你要单独点对点推送，否则不需要导师提供 UID。
+
 不要把 SPT URL、appToken 或 UID 写进代码、README 或公开仓库；本地 `.env` 已被 `.gitignore` 忽略。
 
-### 3. 配置完整简报链接
+### 4. 配置完整简报链接
 
 微信消息默认采用适合手机阅读的纯文本栏目排版，例如【今日概览】、【今日最值得读】、【文章 1】、【一句话结论】、【证据强度提醒】、【我的判断】和【术语小词典】。运行 warning 不会放在正文开头，只会在末尾“运行提示”里简要提醒。
 
@@ -201,7 +226,7 @@ PUBLIC_DIGEST_BASE_URL=https://your-name.github.io/sports-lit-digest
 https://your-name.github.io/sports-lit-digest/YYYY-MM-DD-digest.html
 ```
 
-### 4. 手动测试微信推送
+### 5. 手动测试微信推送
 
 先 dry-run，不会真实发送：
 
@@ -215,7 +240,7 @@ python -m src.main --days-back 3 --dry-run --send-wechat
 python -m src.main --days-back 3 --send-wechat --wechat-mode short
 ```
 
-如果 SPT 和标准发送都没有配置，程序会跳过推送并输出 warning，不会让 digest 生成失败。推送失败也不会影响 Markdown/HTML 简报生成。
+如果标准发送和 SPT 都没有配置，程序会跳过推送并输出 warning，不会让 digest 生成失败。推送失败也不会影响 Markdown/HTML 简报生成。
 
 ## 修改期刊白名单
 
@@ -350,28 +375,30 @@ git push -u origin main
 3. 打开仓库 `Settings -> Pages`，在 `Build and deployment` 里把 `Source` 选择为 `GitHub Actions`。
 4. 打开 `Settings -> Secrets and variables -> Actions -> New repository secret`，添加运行所需 Secrets。
 
-需要在 GitHub 仓库的 `Settings -> Secrets and variables -> Actions` 中配置：
+如果使用导师订阅 Topic，推荐在 GitHub 仓库的 `Settings -> Secrets and variables -> Actions` 中配置：
 
 ```text
-WXPUSHER_SPT_ENABLED
-WXPUSHER_SPT_URL
+WXPUSHER_ENABLED
+WXPUSHER_APP_TOKEN
+WXPUSHER_TOPIC_IDS
 PUBLIC_DIGEST_BASE_URL
 ```
 
 推荐值：
 
 ```text
-WXPUSHER_SPT_ENABLED=true
-WXPUSHER_SPT_URL=你的完整 WxPusher SPT URL
+WXPUSHER_ENABLED=true
+WXPUSHER_APP_TOKEN=你的 WxPusher appToken
+WXPUSHER_TOPIC_IDS=你的 topicId
 PUBLIC_DIGEST_BASE_URL=https://<你的GitHub用户名>.github.io/sports-lit-digest
 ```
 
 可选 Secrets：
 
 ```text
-WXPUSHER_APP_TOKEN
 WXPUSHER_UIDS
-WXPUSHER_TOPIC_IDS
+WXPUSHER_SPT_ENABLED
+WXPUSHER_SPT_URL
 SEMANTIC_SCHOLAR_API_KEY
 NCBI_EMAIL
 NCBI_API_KEY
@@ -380,7 +407,7 @@ CROSSREF_MAILTO
 
 `SKIP_EMPTY_PUSH` 默认在 workflow 中设为 `true`，通常不需要放进 Secret。
 
-如果用 SPT，配置 `WXPUSHER_SPT_ENABLED=true` 和 `WXPUSHER_SPT_URL` 即可；如果用标准发送，配置 `WXPUSHER_APP_TOKEN` 和 `WXPUSHER_UIDS`。如果两套都配置，程序优先使用 SPT。
+如果用 SPT，配置 `WXPUSHER_SPT_ENABLED=true` 和 `WXPUSHER_SPT_URL` 即可；如果用标准发送，配置 `WXPUSHER_APP_TOKEN`，并至少配置 `WXPUSHER_UIDS` 或 `WXPUSHER_TOPIC_IDS` 之一。如果两套都配置，程序优先使用标准发送，SPT 作为 fallback。
 
 5. 手动测试：打开 GitHub 仓库的 `Actions -> Daily Sports Lit Digest -> Run workflow`，保持默认 `days_back=3`，可以先把 `dry_run` 设为 `true` 验证生成和 Pages 部署，再正式运行。日常建议保持 `wechat_mode=short`；如果你主动想看全文，可以手动改成 `wechat_mode=full`；如果想测试智能策略，可以改成 `wechat_mode=smart`。
 6. 如果要测试云端微信推送通路，并且最近 3 天的文章已经在 `seen_papers.json` 里导致 `Selected: 0`，可以手动运行 workflow 时把 `force_send` 设为 `true`。这会在本次运行中忽略 seen cache，允许重复推送符合条件的文章，但不会保存或破坏正式 seen cache。定时每日运行不会使用 `force_send`，仍然正常去重。
