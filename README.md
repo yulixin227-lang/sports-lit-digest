@@ -99,7 +99,7 @@ No selected papers; skipped WeChat push.
 
 微信推送支持三种模式：
 
-- `--wechat-mode short`：日常默认模式。只推今日概览、每篇文章的标题、简短英文原题、文章类型、推荐指数、质量评分、一句话结论、简短证据提醒、为什么值得看，以及阅读全文/历史简报链接。
+- `--wechat-mode short`：日常默认模式。只推今日概览、每篇文章的标题、简短英文原题、期刊/JCR/中科院/IF 简短指标、文章类型、推荐指数、质量评分、一句话结论、简短证据提醒、为什么值得看，以及阅读全文/历史简报链接。
 - `--wechat-mode full`：推送完整 Markdown digest 正文；内容过长时会按段落或文章边界自动分段，并在每段末尾标注“继续下一条”或“本期结束”。
 - `--wechat-mode smart`：保留为手动模式。最终推荐 0 篇时不推送；1 篇时推完整正文；2 篇及以上时推短摘要。
 
@@ -234,6 +234,31 @@ python -m src.main --days-back 3 --send-wechat --wechat-mode short
   "priority": 30
 }
 ```
+
+## 维护期刊指标
+
+期刊影响因子、JCR 分区和中科院分区不会从 PubMed、Crossref 或 Semantic Scholar 自动获取，也不会由程序推断。请手动维护：
+
+```text
+config/journal_metrics.yaml
+```
+
+每个期刊可以配置：
+
+- `display_name`：正式显示的期刊名称
+- `aliases`：期刊缩写或别名，用于匹配不同数据库返回的名称
+- `impact_factor`：影响因子；未知时保持 `null`
+- `impact_factor_year`：影响因子年份
+- `jcr_quartile`：JCR 分区，例如 `Q1`
+- `jcr_category`：JCR 学科类别，例如 `Sport Sciences`
+- `jcr_year`：JCR 数据年份
+- `cas_zone`：中科院分区，例如 `一区`
+- `cas_category`：中科院学科类别，例如 `体育科学`
+- `cas_year`：中科院分区年份
+- `metrics_source`：数据来源，当前建议写 `manual`
+- `notes`：维护备注
+
+建议每年根据学校数据库、Journal Citation Reports 和中科院分区表更新一次。不要编造影响因子或分区；如果暂时查不到，就保持 `null`，最终 digest 会显示“未配置”。如果学校数据库能查到 JCR 和中科院分区，可以把结果填入 `journal_metrics.yaml`，并在 `notes` 里记录来源或更新时间。
 
 ## 修改关键词
 

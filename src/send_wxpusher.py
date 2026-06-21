@@ -444,12 +444,17 @@ def build_wechat_message(
 
     if papers:
         for index, paper in enumerate(papers, 1):
+            metrics = _paper_journal_metrics(paper)
             lines.extend(
                 [
                     "————————————",
                     f"【文章 {index}】",
                     str(paper.get("chinese_title") or "标题待补全"),
                     f"英文原题：{_truncate_text(paper.get('english_title') or paper.get('title') or '摘要中未提供', 96)}",
+                    f"期刊：{metrics['display_name']}",
+                    f"JCR：{metrics['jcr_quartile']}",
+                    f"中科院：{metrics['cas_zone']}",
+                    f"IF：{metrics['impact_factor']}",
                     f"文章类型：{paper.get('article_type_label', '类型待补全')}",
                     f"推荐指数：{paper.get('stars') or paper.get('recommendation_index', '待评估')}",
                     f"质量评分：{paper.get('score', '待评估')}/100",
@@ -657,6 +662,22 @@ def _collect_dictionary_terms(papers: list[dict[str, Any]]) -> list[dict[str, st
                 seen.add(key)
                 terms.append({"term": term, "definition": definition})
     return terms
+
+
+def _paper_journal_metrics(paper: dict[str, Any]) -> dict[str, str]:
+    metrics = paper.get("journal_metrics") or {}
+    return {
+        "display_name": _metric_text(metrics.get("display_name") or paper.get("journal")),
+        "jcr_quartile": _metric_text(metrics.get("jcr_quartile")),
+        "cas_zone": _metric_text(metrics.get("cas_zone")),
+        "impact_factor": _metric_text(metrics.get("impact_factor_display") or metrics.get("impact_factor")),
+    }
+
+
+def _metric_text(value: Any) -> str:
+    if value is None or str(value).strip() == "":
+        return "未配置"
+    return str(value).strip()
 
 
 def _paper_section(paper: dict[str, Any], label: str) -> str:

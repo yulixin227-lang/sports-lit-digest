@@ -35,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     start_date = end_date - timedelta(days=max(args.days_back, 1) - 1)
 
     journals_config = load_yaml_config(ROOT / "config" / "journals.yaml")
+    journal_metrics_config = load_yaml_config(ROOT / "config" / "journal_metrics.yaml")
     keywords_config = load_yaml_config(ROOT / "config" / "keywords.yaml")
     scoring_config = load_yaml_config(ROOT / "config" / "scoring.yaml")
     seen_path = ROOT / "data" / "seen_papers.json"
@@ -64,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     skip_empty_push = bool_env("SKIP_EMPTY_PUSH", True)
     selection_seen = empty_seen() if args.force_send else seen
     selected = select_top_papers(scored, seen=selection_seen, min_score=min_score, max_papers=max_papers)
-    summaries = summarize_papers(selected, keywords_config)
+    summaries = summarize_papers(selected, keywords_config, journal_metrics_config)
 
     md_path, html_path = render_digest(
         summaries,

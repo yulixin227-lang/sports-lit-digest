@@ -32,6 +32,15 @@
 
 **期刊 / 年份 / DOI / PMID**：{{ paper.journal }} / {{ paper.year }} / {{ paper.doi }} / {{ paper.pmid }}
 
+**期刊信息**：
+
+* 期刊：{{ paper.journal_metrics.display_name }}
+* 影响因子：{{ paper.journal_metrics.impact_factor_display }}
+* JCR分区：{{ paper.journal_metrics.jcr_display }}
+* 中科院分区：{{ paper.journal_metrics.cas_display }}
+* 指标年份：{{ paper.journal_metrics.metrics_year_display }}
+* 数据来源：{{ paper.journal_metrics.metrics_source }}
+
 **文章类型**：{{ paper.article_type_label }}
 
 **推荐指数**：{{ paper.stars }}（{{ paper.recommendation_index }}）

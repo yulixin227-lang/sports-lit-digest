@@ -30,6 +30,14 @@
       margin: 24px 0;
     }
     .meta { color: #57606a; margin: 6px 0; }
+    .journal-metrics {
+      border: 1px solid #d8dee4;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin: 14px 0;
+      background: #fbfbfd;
+    }
+    .journal-metrics ul { margin: 6px 0 0 18px; padding: 0; }
     .score { font-weight: 700; }
     .field { margin: 18px 0; }
     .label { font-weight: 700; }
@@ -83,6 +91,17 @@
     <h2>{{ loop.index }}. {{ paper.chinese_title }}</h2>
     <p class="meta"><strong>英文原题：</strong>{{ paper.title }}</p>
     <p class="meta"><strong>期刊 / 年份 / DOI / PMID：</strong>{{ paper.journal }} / {{ paper.year }} / {{ paper.doi }} / {{ paper.pmid }}</p>
+    <section class="journal-metrics">
+      <strong>期刊信息</strong>
+      <ul>
+        <li>期刊：{{ paper.journal_metrics.display_name }}</li>
+        <li>影响因子：{{ paper.journal_metrics.impact_factor_display }}</li>
+        <li>JCR分区：{{ paper.journal_metrics.jcr_display }}</li>
+        <li>中科院分区：{{ paper.journal_metrics.cas_display }}</li>
+        <li>指标年份：{{ paper.journal_metrics.metrics_year_display }}</li>
+        <li>数据来源：{{ paper.journal_metrics.metrics_source }}</li>
+      </ul>
+    </section>
     <p class="meta"><strong>文章类型：</strong>{{ paper.article_type_label }}</p>
     <p class="score">推荐指数：{{ paper.stars }}（{{ paper.recommendation_index }}） | 质量评分：{{ paper.score }}/100</p>
     <p class="meta"><strong>关键词：</strong>{{ paper.keywords_display }}</p>

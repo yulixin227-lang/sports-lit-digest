@@ -263,6 +263,14 @@ def _paper_markdown(index: int, paper: dict[str, Any]) -> list[str]:
         "",
         f"**期刊 / 年份 / DOI / PMID**：{paper['journal']} / {paper['year']} / {paper['doi']} / {paper['pmid']}",
         "",
+        "**期刊信息**：",
+        f"- 期刊：{_journal_metric(paper, 'display_name')}",
+        f"- 影响因子：{_journal_metric(paper, 'impact_factor_display')}",
+        f"- JCR分区：{_journal_metric(paper, 'jcr_display')}",
+        f"- 中科院分区：{_journal_metric(paper, 'cas_display')}",
+        f"- 指标年份：{_journal_metric(paper, 'metrics_year_display')}",
+        f"- 数据来源：{_journal_metric(paper, 'metrics_source')}",
+        "",
         f"**文章类型**：{paper['article_type_label']}",
         "",
         f"**推荐指数**：{paper['stars']}（{paper['recommendation_index']}）",
@@ -308,6 +316,7 @@ def _fallback_html(context: dict[str, Any]) -> str:
         "h1{font-size:30px;line-height:1.35;margin-bottom:20px}h2{font-size:22px;line-height:1.4;margin:0 0 12px}h3{font-size:19px;margin-top:32px}",
         ".overview{border:1px solid #d0d7de;border-radius:8px;padding:18px 20px;background:#f6f8fa;margin-bottom:28px}",
         ".paper-card{border:1px solid #d0d7de;border-radius:8px;padding:22px 24px;margin:24px 0}",
+        ".journal-metrics{border:1px solid #d8dee4;border-radius:8px;padding:12px 14px;margin:14px 0;background:#fbfbfd}.journal-metrics ul{margin:6px 0 0 18px;padding:0}",
         ".meta{color:#57606a;margin:6px 0}.score{font-weight:700}.field{margin:18px 0}.label{font-weight:700}",
         ".evidence{border-left:4px solid #0969da;background:#f6f8fa;padding:10px 14px;margin:18px 0;color:#24292f}",
         "a{color:#0969da}.dict{border-top:1px solid #d0d7de;margin-top:34px;padding-top:18px}",
@@ -348,6 +357,14 @@ def _paper_html(index: int, paper: dict[str, Any]) -> list[str]:
         f"<h2>{index}. {html.escape(str(paper['chinese_title']))}</h2>",
         f"<p class='meta'><strong>英文原题：</strong>{html.escape(str(paper['title']))}</p>",
         f"<p class='meta'><strong>期刊 / 年份 / DOI / PMID：</strong>{html.escape(str(paper['journal']))} / {html.escape(str(paper['year']))} / {html.escape(str(paper['doi']))} / {html.escape(str(paper['pmid']))}</p>",
+        "<section class='journal-metrics'><strong>期刊信息</strong><ul>",
+        f"<li>期刊：{html.escape(_journal_metric(paper, 'display_name'))}</li>",
+        f"<li>影响因子：{html.escape(_journal_metric(paper, 'impact_factor_display'))}</li>",
+        f"<li>JCR分区：{html.escape(_journal_metric(paper, 'jcr_display'))}</li>",
+        f"<li>中科院分区：{html.escape(_journal_metric(paper, 'cas_display'))}</li>",
+        f"<li>指标年份：{html.escape(_journal_metric(paper, 'metrics_year_display'))}</li>",
+        f"<li>数据来源：{html.escape(_journal_metric(paper, 'metrics_source'))}</li>",
+        "</ul></section>",
         f"<p class='meta'><strong>文章类型：</strong>{html.escape(str(paper['article_type_label']))}</p>",
         f"<p class='score'>推荐指数：{html.escape(str(paper['stars']))}（{html.escape(str(paper['recommendation_index']))}） | 质量评分：{html.escape(str(paper['score']))}/100</p>",
         f"<p class='meta'><strong>关键词：</strong>{html.escape(str(paper['keywords_display']))}</p>",
@@ -374,6 +391,14 @@ def _dictionary_html(term_dictionary: list[dict[str, str]]) -> list[str]:
 
 def _html_field(label: str, value: str) -> str:
     return f"<p class='field'><span class='label'>{html.escape(str(label))}：</span>{html.escape(str(value))}</p>"
+
+
+def _journal_metric(paper: dict[str, Any], field: str) -> str:
+    metrics = paper.get("journal_metrics") or {}
+    value = metrics.get(field)
+    if value is None or str(value).strip() == "":
+        return "未配置"
+    return str(value)
 
 
 def _top_pick_text(top_pick: dict[str, Any]) -> str:

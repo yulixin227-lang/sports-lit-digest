@@ -4,6 +4,7 @@ import re
 from collections import OrderedDict
 from typing import Any
 
+from .journal_metrics import get_journal_metrics
 from .utils import normalize_doi, normalize_text
 
 
@@ -89,13 +90,15 @@ TERM_DEFINITIONS: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
 def summarize_papers(
     papers: list[dict[str, Any]],
     keywords_config: dict[str, Any],
+    journal_metrics_config: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    return [summarize_paper(paper, keywords_config) for paper in papers]
+    return [summarize_paper(paper, keywords_config, journal_metrics_config) for paper in papers]
 
 
 def summarize_paper(
     paper: dict[str, Any],
     keywords_config: dict[str, Any],
+    journal_metrics_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     abstract = str(paper.get("abstract") or "").strip()
     sections = _extract_labeled_sections(abstract)
@@ -119,11 +122,14 @@ def summarize_paper(
 
     body_sections = _body_sections(article_type["key"], details)
     summary_text = _summary_blob(details, body_sections)
+    journal = paper.get("journal") or "期刊信息待补全"
+    journal_metrics = get_journal_metrics(journal, journal_metrics_config)
 
     return {
         "chinese_title": details["chinese_title"],
         "title": paper.get("title") or "Untitled",
-        "journal": paper.get("journal") or "期刊信息待补全",
+        "journal": journal,
+        "journal_metrics": journal_metrics,
         "year": paper.get("year") or _year_from_date(paper.get("publication_date")) or "年份待补全",
         "doi": normalize_doi(paper.get("doi")) or "摘要中未提供",
         "pmid": str(paper.get("pmid") or "").strip() or "摘要中未提供",
