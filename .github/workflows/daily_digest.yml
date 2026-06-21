@@ -1,9 +1,6 @@
 name: Daily Sports Lit Digest
 
 on:
-  schedule:
-    # GitHub Actions cron uses UTC; 00:00 UTC is 08:00 Asia/Taipei.
-    - cron: "0 0 * * *"
   workflow_dispatch:
     inputs:
       days_back:
@@ -22,6 +19,9 @@ on:
         description: "WeChat mode: short, full, or smart"
         required: false
         default: "short"
+  schedule:
+    # GitHub Actions cron uses UTC; 00:00 UTC is 08:00 Asia/Taipei.
+    - cron: "0 0 * * *"
 
 permissions:
   contents: read
@@ -39,10 +39,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     env:
-      DAYS_BACK: ${{ github.event.inputs.days_back || '3' }}
-      DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-      FORCE_SEND: ${{ github.event.inputs.force_send || 'false' }}
-      WECHAT_MODE: ${{ github.event.inputs.wechat_mode || 'short' }}
+      DAYS_BACK: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.days_back || '3' }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run || 'false' }}
+      FORCE_SEND: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force_send || 'false' }}
+      WECHAT_MODE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.wechat_mode || 'short' }}
       NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
       NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
       CROSSREF_MAILTO: ${{ secrets.CROSSREF_MAILTO }}
