@@ -5,6 +5,7 @@ from collections import OrderedDict
 from typing import Any
 
 from .journal_metrics import get_journal_metrics
+from .keyword_utils import iter_keywords
 from .utils import normalize_doi, normalize_text
 
 
@@ -124,6 +125,15 @@ def summarize_paper(
     summary_text = _summary_blob(details, body_sections)
     journal = paper.get("journal") or "期刊信息待补全"
     journal_metrics = get_journal_metrics(journal, journal_metrics_config)
+    classification = paper.get("classification") or {}
+    study_type_display = classification.get("study_type_display") or "未明确研究类型"
+    data_source_display = classification.get("data_source_display") or "摘要中未提供"
+    elite_radar_display = classification.get("elite_radar_display") or "否"
+    relation_to_me = classification.get("relation_to_me") or "这篇文章与当前扩展方向的关系不够明确，建议先作为候选文献保留。"
+    focus_topics = _focus_topics_from_terms(keyword_terms, keyword_labels, classification)
+    direction_display = classification.get("direction_display") or "未明确分类"
+    if direction_display == "未明确分类" and focus_topics:
+        direction_display = " / ".join(focus_topics[:3])
 
     return {
         "chinese_title": details["chinese_title"],
@@ -151,7 +161,16 @@ def summarize_paper(
         "matched_keywords": keyword_labels,
         "keyword_terms": keyword_terms,
         "keywords_display": ", ".join(keyword_terms) if keyword_terms else "摘要中未提供",
-        "focus_topics": _focus_topics_from_terms(keyword_terms, keyword_labels),
+        "focus_topics": focus_topics,
+        "direction_display": direction_display,
+        "study_type_display": study_type_display,
+        "data_source_display": data_source_display,
+        "elite_radar_display": elite_radar_display,
+        "relation_to_me": relation_to_me,
+        "personal_relevance_score": paper.get("personal_relevance_score")
+        or classification.get("personal_relevance_score")
+        or 0,
+        "classification": classification,
         "dictionary_terms": _dictionary_terms(paper, summary_text),
         "top_pick_reason": _top_pick_reason(article_type["key"], keyword_terms, details),
         "publication_date": paper.get("publication_date"),
@@ -783,6 +802,22 @@ def _keyword_terms(paper: dict[str, Any], matched_keywords: list[dict[str, Any]]
         ("vo2", "VO2max"),
         ("heart rate variability", "HRV"),
         ("surface electromyography", "sEMG"),
+        ("uk biobank", "UK Biobank"),
+        ("nhanes", "NHANES"),
+        ("obesity phenotype", "obesity phenotype"),
+        ("metabolically healthy obesity", "metabolically healthy obesity"),
+        ("physical activity", "physical activity"),
+        ("accelerometer", "accelerometer"),
+        ("skeletal muscle", "skeletal muscle"),
+        ("dna methylation", "DNA methylation"),
+        ("rna-seq", "RNA-seq"),
+        ("muscle memory", "muscle memory"),
+        ("dietary fat", "dietary fat"),
+        ("fatty acid", "fatty acid"),
+        ("lipid metabolism", "lipid metabolism"),
+        ("sports nutrition", "sports nutrition"),
+        ("protein supplementation", "protein supplementation"),
+        ("creatine", "creatine"),
     ]
     for trigger, label in domain_terms:
         if trigger in blob and label not in terms:
@@ -790,9 +825,13 @@ def _keyword_terms(paper: dict[str, Any], matched_keywords: list[dict[str, Any]]
     return list(dict.fromkeys(terms))[:8]
 
 
-def _focus_topics_from_terms(keyword_terms: list[str], keyword_labels: list[str]) -> list[str]:
+def _focus_topics_from_terms(
+    keyword_terms: list[str],
+    keyword_labels: list[str],
+    classification: dict[str, Any] | None = None,
+) -> list[str]:
     terms = set(keyword_terms)
-    topics: list[str] = []
+    topics: list[str] = list((classification or {}).get("directions") or [])
     if "musculoskeletal rehabilitation" in terms or "rehabilitation" in terms:
         topics.append("肌骨康复")
     if "obesity" in terms:
@@ -895,7 +934,7 @@ def _extract_numbers(text: str) -> list[str]:
 def _match_keywords(paper: dict[str, Any], keywords_config: dict[str, Any]) -> list[dict[str, Any]]:
     blob = normalize_text(" ".join([str(paper.get("title") or ""), str(paper.get("abstract") or "")]))
     matched = []
-    for keyword in keywords_config.get("keywords", []):
+    for keyword in iter_keywords(keywords_config):
         terms = [keyword.get("term"), *keyword.get("aliases", [])]
         if any(normalize_text(term) in blob for term in terms if term):
             matched.append(keyword)

@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 from datetime import date
 from typing import Any
 
+from .keyword_utils import iter_keywords
 from .utils import http_post_json, http_post_text, normalize_doi
 
 
@@ -18,11 +19,13 @@ def fetch_pubmed_articles(
     end_date: date,
     journals_config: dict[str, Any],
     keywords_config: dict[str, Any],
+    categories_config: dict[str, Any] | None = None,
+    elite_journals_config: dict[str, Any] | None = None,
     retmax: int = 100,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Fetch recent PubMed articles matching configured journals and keywords."""
     warnings: list[str] = []
-    query = build_pubmed_query(journals_config, keywords_config)
+    query = build_pubmed_query(journals_config, keywords_config, categories_config, elite_journals_config)
     params = {
         "db": "pubmed",
         "term": query,
@@ -66,6 +69,8 @@ def fetch_pubmed_articles(
 def build_pubmed_query(
     journals_config: dict[str, Any],
     keywords_config: dict[str, Any],
+    categories_config: dict[str, Any] | None = None,
+    elite_journals_config: dict[str, Any] | None = None,
 ) -> str:
     journal_terms = []
     for journal in journals_config.get("journals", []):
@@ -74,7 +79,7 @@ def build_pubmed_query(
                 journal_terms.append(f'"{_escape_query(str(name))}"[Journal]')
 
     keyword_terms = []
-    for keyword in keywords_config.get("keywords", []):
+    for keyword in iter_keywords(keywords_config, ["core_keywords", "keywords"]):
         for term in [keyword.get("term"), *keyword.get("aliases", [])]:
             if term:
                 keyword_terms.append(f'"{_escape_query(str(term))}"[Title/Abstract]')
@@ -84,9 +89,58 @@ def build_pubmed_query(
     if not keyword_terms:
         raise ValueError("config/keywords.yaml 至少需要一个关键词")
 
+    query_parts = []
     journal_part = " OR ".join(sorted(set(journal_terms)))
     keyword_part = " OR ".join(sorted(set(keyword_terms)))
-    return f"({journal_part}) AND ({keyword_part})"
+    query_parts.append(f"(({journal_part}) AND ({keyword_part}))")
+
+    for configured_query in _category_pubmed_queries(categories_config or {}):
+        query_parts.append(_free_text_query(configured_query))
+
+    elite_part = _elite_pubmed_query(elite_journals_config or {}, keywords_config)
+    if elite_part:
+        query_parts.append(elite_part)
+
+    return " OR ".join(query_parts)
+
+
+def _category_pubmed_queries(categories_config: dict[str, Any]) -> list[str]:
+    queries: list[str] = []
+    for category in categories_config.get("categories", []) or []:
+        queries.extend(str(item) for item in category.get("pubmed_queries", []) if item)
+    return list(dict.fromkeys(queries))
+
+
+def _free_text_query(query: str) -> str:
+    parts = [part.strip() for part in query.split(" AND ") if part.strip()]
+    if not parts:
+        return ""
+    return "(" + " AND ".join(f'"{_escape_query(part)}"[Title/Abstract]' for part in parts) + ")"
+
+
+def _elite_pubmed_query(
+    elite_journals_config: dict[str, Any],
+    keywords_config: dict[str, Any],
+) -> str:
+    journal_terms = []
+    for journal in elite_journals_config.get("journals", []) or []:
+        for name in [journal.get("name"), *(journal.get("aliases") or [])]:
+            if name:
+                journal_terms.append(f'"{_escape_query(str(name))}"[Journal]')
+    keyword_terms = []
+    required_terms = elite_journals_config.get("required_topic_terms") or []
+    if required_terms:
+        for term in required_terms:
+            if term:
+                keyword_terms.append(f'"{_escape_query(str(term))}"[Title/Abstract]')
+    else:
+        for keyword in iter_keywords(keywords_config, ["elite_journal_keywords"]):
+            for term in [keyword.get("term"), *(keyword.get("aliases") or [])]:
+                if term:
+                    keyword_terms.append(f'"{_escape_query(str(term))}"[Title/Abstract]')
+    if not journal_terms or not keyword_terms:
+        return ""
+    return f"(({ ' OR '.join(sorted(set(journal_terms))) }) AND ({ ' OR '.join(sorted(set(keyword_terms))) }))"
 
 
 def parse_pubmed_xml(xml_text: str) -> list[dict[str, Any]]:

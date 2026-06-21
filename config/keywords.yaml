@@ -1,5 +1,5 @@
 {
-  "keywords": [
+  "core_keywords": [
     {"term": "exercise physiology", "zh": "运动生理学", "aliases": ["exercise physiological"], "weight": 1.0},
     {"term": "sports medicine", "zh": "运动医学", "aliases": ["sport medicine"], "weight": 1.0},
     {"term": "rehabilitation", "zh": "康复", "aliases": ["rehab"], "weight": 1.0},
@@ -22,6 +22,54 @@
     {"term": "exoskeleton", "zh": "外骨骼", "aliases": ["exosuit"], "weight": 1.0},
     {"term": "gait", "zh": "步态", "aliases": ["walking biomechanics"], "weight": 1.0},
     {"term": "tendon", "zh": "肌腱", "aliases": ["tendinopathy"], "weight": 1.0},
-    {"term": "muscle injury", "zh": "肌肉损伤", "aliases": ["muscle damage", "hamstring injury"], "weight": 1.0}
+    {"term": "muscle injury", "zh": "肌肉损伤", "aliases": ["muscle damage", "hamstring injury"], "weight": 1.0},
+    {"term": "physical activity", "zh": "体力活动", "aliases": ["sedentary behavior", "device-measured physical activity", "accelerometer"], "weight": 1.0},
+    {"term": "UK Biobank", "zh": "UK Biobank", "aliases": ["UKB"], "weight": 1.0},
+    {"term": "NHANES", "zh": "NHANES", "aliases": ["National Health and Nutrition Examination Survey"], "weight": 1.0},
+    {"term": "obesity phenotype", "zh": "肥胖表型", "aliases": ["obesity subtype", "obesity heterogeneity"], "weight": 1.0},
+    {"term": "skeletal muscle", "zh": "骨骼肌", "aliases": ["skeletal muscle adaptation"], "weight": 1.0},
+    {"term": "muscle strength", "zh": "肌肉力量", "aliases": ["grip strength"], "weight": 1.0},
+    {"term": "DNA methylation", "zh": "DNA 甲基化", "aliases": ["epigenetics", "epigenetic memory"], "weight": 1.0},
+    {"term": "RNA-seq", "zh": "RNA-seq", "aliases": ["single-cell RNA-seq", "scRNA-seq", "snRNA-seq"], "weight": 1.0},
+    {"term": "dietary fat", "zh": "膳食脂肪", "aliases": ["fatty acid", "lipid metabolism"], "weight": 1.0},
+    {"term": "sports nutrition", "zh": "运动营养", "aliases": ["protein supplementation", "creatine", "caffeine", "nitrate"], "weight": 1.0}
+  ],
+  "expansion_keywords": [
+    {"term": "metabolically healthy obesity", "zh": "代谢健康型肥胖", "aliases": ["metabolically unhealthy obesity"], "weight": 1.1},
+    {"term": "adiposity phenotype", "zh": "脂肪表型", "aliases": ["fat distribution", "visceral fat", "subcutaneous fat", "ectopic fat"], "weight": 1.0},
+    {"term": "metabolic syndrome", "zh": "代谢综合征", "aliases": ["insulin resistance"], "weight": 1.0},
+    {"term": "adipose tissue", "zh": "脂肪组织", "aliases": ["body composition"], "weight": 1.0},
+    {"term": "obesity cluster", "zh": "肥胖聚类", "aliases": ["latent class analysis", "unsupervised clustering", "machine learning"], "weight": 1.0},
+    {"term": "China Kadoorie Biobank", "zh": "China Kadoorie Biobank", "aliases": ["CKB"], "weight": 1.0},
+    {"term": "Biobank Japan", "zh": "Biobank Japan", "aliases": [], "weight": 0.9},
+    {"term": "All of Us", "zh": "All of Us", "aliases": [], "weight": 0.9},
+    {"term": "cohort", "zh": "队列研究", "aliases": ["prospective cohort", "longitudinal cohort", "population study", "epidemiology"], "weight": 1.0},
+    {"term": "wearable", "zh": "可穿戴设备", "aliases": ["step count", "MVPA", "moderate-to-vigorous physical activity", "light physical activity"], "weight": 0.9},
+    {"term": "mortality", "zh": "死亡风险", "aliases": ["cardiovascular disease", "diabetes", "cancer"], "weight": 0.8},
+    {"term": "animal model", "zh": "动物模型", "aliases": ["diet-induced obesity", "high-fat diet", "mouse", "mice", "rat"], "weight": 0.9},
+    {"term": "muscle memory", "zh": "肌肉记忆", "aliases": ["myonuclei", "epigenetic memory"], "weight": 1.1},
+    {"term": "chromatin accessibility", "zh": "染色质可及性", "aliases": ["ATAC-seq", "histone modification"], "weight": 1.0},
+    {"term": "spatial transcriptomics", "zh": "空间转录组", "aliases": ["proteomics", "metabolomics", "multi-omics", "bioinformatics"], "weight": 1.0},
+    {"term": "satellite cell", "zh": "卫星细胞", "aliases": ["muscle stem cell"], "weight": 1.0},
+    {"term": "detraining", "zh": "停训", "aliases": ["retraining", "hypertrophy", "atrophy", "sarcopenia"], "weight": 0.9},
+    {"term": "olive oil", "zh": "橄榄油", "aliases": ["fish oil", "omega-3", "omega-6"], "weight": 0.9},
+    {"term": "saturated fat", "zh": "饱和脂肪", "aliases": ["unsaturated fat", "medium-chain triglyceride", "MCT"], "weight": 0.9},
+    {"term": "ketogenic diet", "zh": "生酮饮食", "aliases": ["low-fat diet", "weight loss", "fat loss"], "weight": 1.0},
+    {"term": "energy expenditure", "zh": "能量消耗", "aliases": ["appetite", "insulin sensitivity"], "weight": 0.9},
+    {"term": "whey protein", "zh": "乳清蛋白", "aliases": ["amino acid", "leucine", "BCAA", "muscle protein synthesis"], "weight": 1.0},
+    {"term": "carbohydrate", "zh": "碳水化合物", "aliases": ["carbohydrate periodization", "glycogen"], "weight": 0.9},
+    {"term": "beta-alanine", "zh": "β-丙氨酸", "aliases": ["vitamin D", "hydration", "ergogenic aid"], "weight": 0.8},
+    {"term": "exercise recovery", "zh": "运动恢复", "aliases": ["recovery", "endurance performance", "athlete"], "weight": 0.9}
+  ],
+  "elite_journal_keywords": [
+    {"term": "exercise", "zh": "运动", "aliases": ["physical activity", "endurance exercise", "resistance exercise"], "weight": 1.0},
+    {"term": "skeletal muscle", "zh": "骨骼肌", "aliases": ["muscle adaptation", "muscle regeneration", "muscle stem cell", "satellite cell"], "weight": 1.0},
+    {"term": "sarcopenia", "zh": "肌少症", "aliases": ["hypertrophy", "atrophy"], "weight": 0.9},
+    {"term": "mitochondrial function", "zh": "线粒体功能", "aliases": ["metabolism"], "weight": 1.0},
+    {"term": "obesity", "zh": "肥胖", "aliases": ["adipose tissue"], "weight": 1.0},
+    {"term": "nutrition", "zh": "营养", "aliases": ["dietary fat", "sports nutrition"], "weight": 1.0},
+    {"term": "muscle memory", "zh": "肌肉记忆", "aliases": ["epigenetics"], "weight": 1.0},
+    {"term": "exercise mimetics", "zh": "运动模拟物", "aliases": ["lactate", "myokine", "exerkine"], "weight": 1.0},
+    {"term": "aging", "zh": "衰老", "aliases": ["inflammation"], "weight": 0.9}
   ]
 }

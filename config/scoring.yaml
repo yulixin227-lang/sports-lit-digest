@@ -75,5 +75,16 @@
     "abstract_partial_score": 3,
     "doi_points": 2,
     "structured_abstract_points": 2
+  },
+  "relevance_boost": {
+    "max_points": 8
+  },
+  "population_database": {
+    "points": 5
+  },
+  "elite_radar": {
+    "min_personal_relevance": 60,
+    "journal_score": 28,
+    "points": 6
   }
 }

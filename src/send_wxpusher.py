@@ -455,6 +455,8 @@ def build_wechat_message(
                     f"JCR：{metrics['jcr_quartile']}",
                     f"中科院：{metrics['cas_zone']}",
                     f"IF：{metrics['impact_factor']}",
+                    f"本篇方向：{paper.get('direction_display') or '未明确分类'}",
+                    f"研究类型：{paper.get('study_type_display') or '未明确研究类型'}",
                     f"文章类型：{paper.get('article_type_label', '类型待补全')}",
                     f"推荐指数：{paper.get('stars') or paper.get('recommendation_index', '待评估')}",
                     f"质量评分：{paper.get('score', '待评估')}/100",

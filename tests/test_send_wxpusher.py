@@ -26,6 +26,8 @@ class WxPusherTests(unittest.TestCase):
             "evidence_strength": "这是范围综述，只能说明研究现状和证据缺口，不能直接证明干预有效。",
             "body_sections": [{"label": "为什么值得看", "value": "它把肥胖、骨关节炎和运动康复放在同一张证据地图里。"}],
             "focus_topics": ["肌骨康复", "肥胖"],
+            "direction_display": "肥胖异质性 / 公开数据库",
+            "study_type_display": "公开数据库 / 人群队列",
             "top_pick_reason": "它能快速说明一个交叉方向的证据版图和研究缺口。",
         }
         with patch.dict(os.environ, {"PUBLIC_DIGEST_BASE_URL": "https://example.com/digests"}, clear=False):
@@ -44,6 +46,8 @@ class WxPusherTests(unittest.TestCase):
         self.assertIn("【一句话结论】", message["content"])
         self.assertIn("【证据强度提醒】", message["content"])
         self.assertIn("【为什么值得看】", message["content"])
+        self.assertIn("本篇方向：肥胖异质性 / 公开数据库", message["content"])
+        self.assertIn("研究类型：公开数据库 / 人群队列", message["content"])
         self.assertIn("【阅读全文】", message["content"])
         self.assertIn("【历史简报】", message["content"])
         self.assertNotIn("## 今日推荐", message["content"])

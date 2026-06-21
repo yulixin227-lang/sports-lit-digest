@@ -294,7 +294,43 @@ config/journal_metrics.yaml
 - `aliases`：同义词、缩写、常见变体
 - `weight`：关键词匹配权重
 
-例如你想加强外骨骼方向，可以提高 `exoskeleton` 的 `weight`，或增加 `wearable robot` 等别名。
+关键词现在分为三组：
+
+- `core_keywords`：强相关关键词，直接参与常规 PubMed 检索。
+- `expansion_keywords`：扩展相关关键词，主要用于评分、方向分类和 digest 标签，不会单独把检索放得过宽。
+- `elite_journal_keywords`：仅用于 Nature / Cell / Science 正刊及重点子刊的主题筛选。
+
+例如你想加强外骨骼方向，可以提高 `exoskeleton` 的 `weight`，或在 `core_keywords` / `expansion_keywords` 中增加 `wearable robot` 等别名。
+
+## 如何扩展研究方向
+
+研究方向扩展尽量通过配置文件完成，不要把检索词写死在代码里。
+
+主要配置文件：
+
+- `config/categories.yaml`：方向分类、每个方向的关键词、额外 PubMed 检索组合。
+- `config/elite_journals.yaml`：Nature / Cell / Science 正刊和重点子刊列表。
+- `config/journal_metrics.yaml`：期刊影响因子、JCR 分区、中科院分区等手动维护指标。
+- `config/keywords.yaml`：总关键词池，分为 `core_keywords`、`expansion_keywords` 和 `elite_journal_keywords`。
+
+当前新增方向包括：
+
+- 肥胖异质性与代谢亚型
+- 体力活动与公开数据库
+- 顶刊运动科学雷达
+- 肌肉力量、肌肉记忆与多组学
+- 脂肪、油脂与减肥
+- 运动营养
+
+如果未来要新增方向，推荐步骤：
+
+1. 在 `config/categories.yaml` 新增一个分类，填写 `id`、中文名、英文名、关键词和必要的 `pubmed_queries`。
+2. 把强相关检索词加入 `config/keywords.yaml` 的 `core_keywords`，把扩展词加入 `expansion_keywords`。
+3. 如果该方向需要盯 Nature / Cell / Science 系列，把主题词加入 `elite_journal_keywords`。
+4. 如果要加入新的顶刊或子刊，更新 `config/elite_journals.yaml`。
+5. 运行 `python -m unittest discover -s tests` 和一次 dry-run，确认分类与微信摘要正常。
+
+顶刊雷达不是“顶刊所有文章都推送”。程序只会在期刊命中 `elite_journals.yaml`，且主题命中运动、肌肉、代谢、肥胖、营养、衰老、表观遗传或多组学等方向时，才标记为“顶刊雷达”。
 
 ## 修改评分规则
 

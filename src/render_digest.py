@@ -273,6 +273,16 @@ def _paper_markdown(index: int, paper: dict[str, Any]) -> list[str]:
         "",
         f"**文章类型**：{paper['article_type_label']}",
         "",
+        f"**本篇方向**：{_paper_value(paper, 'direction_display', '未明确分类')}",
+        "",
+        f"**研究类型标签**：{_paper_value(paper, 'study_type_display', '未明确研究类型')}",
+        "",
+        f"**数据来源**：{_paper_value(paper, 'data_source_display', '摘要中未提供')}",
+        "",
+        f"**是否顶刊雷达**：{_paper_value(paper, 'elite_radar_display', '否')}",
+        "",
+        f"**和我有什么关系**：{_paper_value(paper, 'relation_to_me', '这篇文章与当前扩展方向的关系不够明确。')}",
+        "",
         f"**推荐指数**：{paper['stars']}（{paper['recommendation_index']}）",
         "",
         f"**质量评分**：{paper['score']}/100",
@@ -366,6 +376,11 @@ def _paper_html(index: int, paper: dict[str, Any]) -> list[str]:
         f"<li>数据来源：{html.escape(_journal_metric(paper, 'metrics_source'))}</li>",
         "</ul></section>",
         f"<p class='meta'><strong>文章类型：</strong>{html.escape(str(paper['article_type_label']))}</p>",
+        f"<p class='meta'><strong>本篇方向：</strong>{html.escape(_paper_value(paper, 'direction_display', '未明确分类'))}</p>",
+        f"<p class='meta'><strong>研究类型标签：</strong>{html.escape(_paper_value(paper, 'study_type_display', '未明确研究类型'))}</p>",
+        f"<p class='meta'><strong>数据来源：</strong>{html.escape(_paper_value(paper, 'data_source_display', '摘要中未提供'))}</p>",
+        f"<p class='meta'><strong>是否顶刊雷达：</strong>{html.escape(_paper_value(paper, 'elite_radar_display', '否'))}</p>",
+        f"<p class='field'><span class='label'>和我有什么关系：</span>{html.escape(_paper_value(paper, 'relation_to_me', '这篇文章与当前扩展方向的关系不够明确。'))}</p>",
         f"<p class='score'>推荐指数：{html.escape(str(paper['stars']))}（{html.escape(str(paper['recommendation_index']))}） | 质量评分：{html.escape(str(paper['score']))}/100</p>",
         f"<p class='meta'><strong>关键词：</strong>{html.escape(str(paper['keywords_display']))}</p>",
         f"<p class='meta'><strong>链接：</strong><a href='{html.escape(str(paper['link']))}'>{html.escape(str(paper['link']))}</a></p>",
@@ -398,6 +413,13 @@ def _journal_metric(paper: dict[str, Any], field: str) -> str:
     value = metrics.get(field)
     if value is None or str(value).strip() == "":
         return "未配置"
+    return str(value)
+
+
+def _paper_value(paper: dict[str, Any], field: str, default: str) -> str:
+    value = paper.get(field)
+    if value is None or str(value).strip() == "":
+        return default
     return str(value)
 
 

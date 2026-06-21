@@ -103,6 +103,11 @@
       </ul>
     </section>
     <p class="meta"><strong>文章类型：</strong>{{ paper.article_type_label }}</p>
+    <p class="meta"><strong>本篇方向：</strong>{{ paper.direction_display }}</p>
+    <p class="meta"><strong>研究类型标签：</strong>{{ paper.study_type_display }}</p>
+    <p class="meta"><strong>数据来源：</strong>{{ paper.data_source_display }}</p>
+    <p class="meta"><strong>是否顶刊雷达：</strong>{{ paper.elite_radar_display }}</p>
+    <p class="field"><span class="label">和我有什么关系：</span>{{ paper.relation_to_me }}</p>
     <p class="score">推荐指数：{{ paper.stars }}（{{ paper.recommendation_index }}） | 质量评分：{{ paper.score }}/100</p>
     <p class="meta"><strong>关键词：</strong>{{ paper.keywords_display }}</p>
     <p class="meta"><strong>链接：</strong><a href="{{ paper.link }}">{{ paper.link }}</a></p>

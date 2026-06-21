@@ -36,6 +36,8 @@ def main(argv: list[str] | None = None) -> int:
 
     journals_config = load_yaml_config(ROOT / "config" / "journals.yaml")
     journal_metrics_config = load_yaml_config(ROOT / "config" / "journal_metrics.yaml")
+    categories_config = load_yaml_config(ROOT / "config" / "categories.yaml")
+    elite_journals_config = load_yaml_config(ROOT / "config" / "elite_journals.yaml")
     keywords_config = load_yaml_config(ROOT / "config" / "keywords.yaml")
     scoring_config = load_yaml_config(ROOT / "config" / "scoring.yaml")
     seen_path = ROOT / "data" / "seen_papers.json"
@@ -47,6 +49,8 @@ def main(argv: list[str] | None = None) -> int:
         end_date=end_date,
         journals_config=journals_config,
         keywords_config=keywords_config,
+        categories_config=categories_config,
+        elite_journals_config=elite_journals_config,
         retmax=int_env("PUBMED_RETMAX", 100),
     )
     warnings.extend(stage_warnings)
@@ -59,7 +63,14 @@ def main(argv: list[str] | None = None) -> int:
         papers, stage_warnings = enrich_with_semantic_scholar(papers)
         warnings.extend(stage_warnings)
 
-    scored = score_papers(papers, journals_config, keywords_config, scoring_config)
+    scored = score_papers(
+        papers,
+        journals_config,
+        keywords_config,
+        scoring_config,
+        categories_config=categories_config,
+        elite_journals_config=elite_journals_config,
+    )
     min_score = int_env("DIGEST_MIN_SCORE", int(scoring_config.get("threshold", 70)))
     max_papers = int_env("DIGEST_MAX_PAPERS", int(scoring_config.get("max_papers", 5)))
     skip_empty_push = bool_env("SKIP_EMPTY_PUSH", True)
