@@ -1,6 +1,6 @@
 import unittest
 
-from src.score_papers import score_paper
+from src.score_papers import score_paper, select_top_papers
 from src.utils import ROOT, load_yaml_config
 
 
@@ -142,6 +142,83 @@ class ScoringTests(unittest.TestCase):
         self.assertFalse(scored["classification"]["is_elite_radar"])
         self.assertLess(scored["score"], 70)
         self.assertLessEqual(scored["score_breakdown"]["score_cap"], 0)
+
+    def test_precision_gate_excludes_low_information_aware_x_from_main_selection(self):
+        paper = {
+            "title": "Factors associated with return-to-sport outcomes following pathogen-confirmed acute respiratory infections in athletes: AWARE X study",
+            "abstract": (
+                "OBJECTIVE: To identify factors associated with return-to-sport outcomes after acute respiratory infections in athletes. "
+                "METHODS: This prospective observational athlete cohort examined follow-up. "
+                "RESULTS: Factors associated with return-to-sport outcomes were examined. "
+                "CONCLUSIONS: Clinical follow-up may support return-to-sport decisions."
+            ),
+            "journal": "British Journal of Sports Medicine",
+            "doi": "10.1000/aware-low-info",
+            "article_types": ["Journal Article"],
+        }
+        scored = score_paper(
+            paper,
+            REAL_JOURNALS,
+            REAL_KEYWORDS,
+            REAL_SCORING,
+            categories_config=REAL_CATEGORIES,
+            elite_journals_config=REAL_ELITE_JOURNALS,
+        )
+        selected = select_top_papers([scored], seen={"dois": set(), "pmids": set()}, min_score=70, max_papers=5, scoring_config=REAL_SCORING)
+
+        self.assertFalse(scored["precision_gate_passed"])
+        self.assertIn("result specificity", scored["precision_gate_reason"])
+        self.assertEqual(selected, [])
+
+    def test_precision_gate_allows_specific_glp1_oa_scoping_review(self):
+        paper = {
+            "title": "GLP-1 receptor agonists and weight-loss strategies for individuals with obesity and hip or knee osteoarthritis: a scoping review.",
+            "abstract": (
+                "METHODS: This scoping review examined weight-loss strategies for adults with obesity and hip or knee osteoarthritis. "
+                "RESULTS: Of 199 included studies, 36 (18.1%) directly assessed GLP-1 receptor agonists and 14/36 (38.9%) reported original data. "
+                "CONCLUSIONS: GLP-1 receptor agonists may be adjuncts in multimodal musculoskeletal care."
+            ),
+            "journal": "British Journal of Sports Medicine",
+            "doi": "10.1000/glp1-oa-specific",
+            "article_types": ["Journal Article"],
+        }
+        scored = score_paper(
+            paper,
+            REAL_JOURNALS,
+            REAL_KEYWORDS,
+            REAL_SCORING,
+            categories_config=REAL_CATEGORIES,
+            elite_journals_config=REAL_ELITE_JOURNALS,
+        )
+        selected = select_top_papers([scored], seen={"dois": set(), "pmids": set()}, min_score=70, max_papers=5, scoring_config=REAL_SCORING)
+
+        self.assertTrue(scored["precision_gate_passed"])
+        self.assertIn("肥胖", scored["classification"]["directions"])
+        self.assertIn(scored, selected)
+
+    def test_precision_gate_keeps_high_quality_core_keyword_trial(self):
+        paper = {
+            "title": "High-intensity interval training improves VO2max and cardiorespiratory fitness",
+            "abstract": (
+                "METHODS: A randomized controlled trial included n=120 adults. "
+                "RESULTS: HIIT improved maximal oxygen uptake and cardiorespiratory fitness with reported effect size and confidence interval. "
+                "CONCLUSIONS: HIIT improved fitness outcomes."
+            ),
+            "journal": "British Journal of Sports Medicine",
+            "doi": "10.1000/hiit-vo2",
+            "article_types": ["Randomized Controlled Trial"],
+        }
+        scored = score_paper(
+            paper,
+            REAL_JOURNALS,
+            REAL_KEYWORDS,
+            REAL_SCORING,
+            categories_config=REAL_CATEGORIES,
+            elite_journals_config=REAL_ELITE_JOURNALS,
+        )
+
+        self.assertTrue(scored["precision_gate_passed"])
+        self.assertGreaterEqual(scored["score"], 70)
 
 
 if __name__ == "__main__":

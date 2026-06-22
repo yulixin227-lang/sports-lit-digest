@@ -18,6 +18,7 @@
       {"term": "randomised controlled trial", "score": 20},
       {"term": "rct", "score": 19},
       {"term": "systematic review", "score": 19},
+      {"term": "scoping review", "score": 16},
       {"term": "meta-analysis", "score": 20},
       {"term": "meta analysis", "score": 20},
       {"term": "clinical trial", "score": 18},
@@ -92,5 +93,17 @@
     "medium_threshold": 75,
     "low_penalty": 12,
     "medium_penalty": 5
+  },
+  "recommendation_precision": {
+    "enabled": true,
+    "min_personal_relevance": 50,
+    "min_result_specificity": 50,
+    "min_observational_result_specificity": 70,
+    "require_observational_effect_estimate": true,
+    "min_core_keyword_matches": 2,
+    "require_direction_evidence": true,
+    "exclude_demoted": true,
+    "exclude_optional_reading": true,
+    "cap_failed_score": 69
   }
 }

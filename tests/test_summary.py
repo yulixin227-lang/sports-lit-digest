@@ -138,7 +138,7 @@ class SummaryTests(unittest.TestCase):
         }
         summary = summarize_paper(paper, {"keywords": []})
 
-        self.assertTrue(summary["chinese_title"].startswith("关于"))
+        self.assertEqual(summary["chinese_title"], "肌肉力量变化与髌股疼痛临床结局变化关系的系统综述与 Meta 分析")
         self.assertNotIn("of the Association", summary["chinese_title"])
         self.assertNotIn("Changes在", summary["chinese_title"])
         self.assertNotIn("合并Meta", summary["chinese_title"])
@@ -160,6 +160,82 @@ class SummaryTests(unittest.TestCase):
         self.assertNotIn("动物模型", summary["chinese_title"])
         self.assertNotIn("运动营养、动物模型", summary["chinese_title"])
         self.assertIn("游泳表现", summary["one_sentence_conclusion"])
+
+    def test_detailed_aware_x_summary_extracts_real_results(self):
+        paper = {
+            "title": "Factors associated with return-to-sport outcomes following pathogen-confirmed acute respiratory infections in athletes: AWARE X study.",
+            "abstract": (
+                "OBJECTIVE: To identify factors associated with return-to-sport (RTS) outcomes following confirmed acute respiratory infections (ARinf) in athletes. "
+                "METHODS: This prospective cohort study included 114 confirmed ARinf cases among athletic individuals. Causative pathogens were identified using multiplex PCR testing. "
+                "RTS outcomes included time (days) to return-to-training (RTT), return-to-full-training (RTFT) and return-to-full-performance (RTFP). Cox regression models (HRs) assessed associations. "
+                "RESULTS: The median days to RTT were 3.5, RTFT 8 and RTFP 11. Amateur athletes had prolonged RTS outcomes (HR range=0.51-0.59; p≤0.03). "
+                "Influenza and SARS-CoV-2 had longer RTS than rhinovirus (HR range=0.11-0.23; p≤0.003). Severe illness was associated with prolonged RTS outcomes (HR range=0.17-0.31; p<0.0001). "
+                "CONCLUSION: Factors associated with RTS outcomes are level of sport participation, illness severity and the causative pathogen."
+            ),
+            "journal": "British Journal of Sports Medicine",
+            "article_types": ["Journal Article"],
+            "matched_keywords": [{"term": "sports medicine", "zh": "运动医学"}],
+            "score": 82,
+            "result_specificity_score": 90,
+            "score_breakdown": {},
+        }
+        summary = summarize_paper(paper, {"keywords": []})
+
+        self.assertIn("114", summary["one_sentence_conclusion"])
+        self.assertIn("RTT", _section(summary, "结局指标"))
+        self.assertIn("HR 0.51-0.59", _section(summary, "主要关联结果"))
+        self.assertIn("SARS-CoV-2", _section(summary, "主要关联结果"))
+        self.assertNotIn("摘要未提供具体效应量", _section(summary, "主要关联结果"))
+
+    def test_force_labral_cartilage_summary_extracts_real_results(self):
+        paper = {
+            "title": "Longitudinal cohort study of the association between labral pathology and cartilage loss in high-impact athletes: the FORCe study.",
+            "abstract": (
+                "OBJECTIVE: This longitudinal study investigated the association between labral tears and cartilage loss in young adults participating in high-impact physical activity. "
+                "METHODS: Study participants were high-impact athletes with and without hip and/or groin pain who underwent 3T MRI at baseline and after 2-3 years. "
+                "RESULTS: 173 (343 hips) participants were included. Follow-up MRIs were collected at a median of 2.1 years after baseline. "
+                "Weak-to-moderate strength associations were identified between cartilage sum change score and baseline anterior labral tears (adjusted incidence rate ratio (a)IRR 1.46; 95% CI 1.01 to 2.09), "
+                "paralabral cysts (aIRR 1.38; 95% CI 1.02 to 1.86) and labral sum score (aIRR 1.05; 95% CI 1.00 to 1.09). "
+                "CONCLUSION: Acetabular labral tears contribute to cartilage loss in young adult athletes."
+            ),
+            "journal": "British Journal of Sports Medicine",
+            "article_types": ["Journal Article"],
+            "matched_keywords": [{"term": "sports medicine", "zh": "运动医学"}],
+            "score": 84,
+            "result_specificity_score": 90,
+            "score_breakdown": {},
+        }
+        summary = summarize_paper(paper, {"keywords": []})
+
+        self.assertEqual(summary["chinese_title"], "高冲击运动员髋臼盂唇病变与软骨流失关系的纵向队列研究：FORCe 研究")
+        self.assertIn("173", summary["one_sentence_conclusion"])
+        self.assertIn("343", _section(summary, "研究对象"))
+        self.assertIn("aIRR 1.46", _section(summary, "主要关联结果"))
+        self.assertNotIn("体力活动与公开数据库", summary["direction_display"])
+
+    def test_patellofemoral_strength_meta_summary_is_specific(self):
+        paper = {
+            "title": "A Systematic Review with Meta-analysis of the Association between Changes in Muscle Strength and Clinical Outcome Changes in Patellofemoral Pain.",
+            "abstract": (
+                "OBJECTIVE: To investigate whether muscle strength changes in people with patellofemoral pain are associated with pain and physical function. "
+                "RESULTS: From 16,750 records screened, 82 trials met the eligibility criteria (4023 participants). "
+                "Strength improvements and pain reduction were associated for knee extensors (r=-0.75, β=-0.21) and hip abductors (r=-0.91, β=-0.31). "
+                "Strength improvements in knee extensors (r=0.70, β=0.15) and hip abductors (r=0.94, β=0.15) were associated with improved function. "
+                "CONCLUSIONS: Lower limb muscle strength improvements are associated with improvements in pain and physical function among people with PFP."
+            ),
+            "journal": "Sports Medicine",
+            "article_types": ["Systematic Review", "Meta-Analysis"],
+            "matched_keywords": [{"term": "rehabilitation", "zh": "康复"}],
+            "score": 88,
+            "result_specificity_score": 90,
+            "score_breakdown": {},
+        }
+        summary = summarize_paper(paper, {"keywords": []})
+
+        self.assertEqual(summary["chinese_title"], "肌肉力量变化与髌股疼痛临床结局变化关系的系统综述与 Meta 分析")
+        self.assertIn("82", summary["one_sentence_conclusion"])
+        self.assertIn("4023", _section(summary, "纳入研究数量 / 样本量"))
+        self.assertIn("髋外展肌 r=-0.91", _section(summary, "合并效应或主要发现"))
 
     def test_ptsd_omics_title_does_not_use_fake_keyword_title(self):
         paper = {

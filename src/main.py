@@ -75,7 +75,13 @@ def main(argv: list[str] | None = None) -> int:
     max_papers = int_env("DIGEST_MAX_PAPERS", int(scoring_config.get("max_papers", 5)))
     skip_empty_push = bool_env("SKIP_EMPTY_PUSH", True)
     selection_seen = empty_seen() if args.force_send else seen
-    selected = select_top_papers(scored, seen=selection_seen, min_score=min_score, max_papers=max_papers)
+    selected = select_top_papers(
+        scored,
+        seen=selection_seen,
+        min_score=min_score,
+        max_papers=max_papers,
+        scoring_config=scoring_config,
+    )
     summaries = summarize_papers(selected, keywords_config, journal_metrics_config)
 
     md_path, html_path = render_digest(

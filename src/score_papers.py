@@ -77,7 +77,14 @@ def score_paper(
         + elite_radar_score
         - result_specificity_penalty
     )
-    capped_total = _apply_score_caps(total, result_specificity_score, classification)
+    precision_gate = _precision_gate_status(
+        paper=paper,
+        classification=classification,
+        result_specificity_score=result_specificity_score,
+        matched_keywords=matched_keywords,
+        scoring_config=scoring_config,
+    )
+    capped_total = _apply_score_caps(total, result_specificity_score, classification, scoring_config, precision_gate)
     paper["score"] = round(max(0, min(100, capped_total)), 1)
     paper["score_breakdown"] = {
         "journal": round(journal_score, 1),
@@ -93,6 +100,8 @@ def score_paper(
         "score_cap": round(capped_total - total, 1),
     }
     paper["result_specificity_score"] = round(result_specificity_score, 1)
+    paper["precision_gate_passed"] = precision_gate["passed"]
+    paper["precision_gate_reason"] = precision_gate["reason"]
     paper["reading_priority"] = _reading_priority(paper["score"], result_specificity_score)
     paper["matched_keywords"] = matched_keywords
     paper["classification"] = classification
@@ -105,11 +114,14 @@ def select_top_papers(
     seen: dict[str, set[str]],
     min_score: int,
     max_papers: int,
+    scoring_config: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     candidates = [
         paper
         for paper in papers
-        if paper.get("score", 0) >= min_score and not is_seen_paper(seen, paper)
+        if paper.get("score", 0) >= min_score
+        and _passes_recommendation_precision(paper, scoring_config)
+        and not is_seen_paper(seen, paper)
     ]
     return sorted(
         candidates,
@@ -122,7 +134,13 @@ def select_top_papers(
     )[:max_papers]
 
 
-def _apply_score_caps(total: float, result_specificity_score: float, classification: dict[str, Any]) -> float:
+def _apply_score_caps(
+    total: float,
+    result_specificity_score: float,
+    classification: dict[str, Any],
+    scoring_config: dict[str, Any],
+    precision_gate: dict[str, Any],
+) -> float:
     if result_specificity_score < 40:
         return min(total, 59.0)
     if result_specificity_score < 50:
@@ -131,11 +149,110 @@ def _apply_score_caps(total: float, result_specificity_score: float, classificat
         classification.get("demote_reason")
         and classification.get("has_category_config")
         and not classification.get("relevance_gate_passed")
+        and not precision_gate.get("passed", False)
     ):
         return min(total, 59.0)
     if classification.get("is_elite_journal") and not classification.get("is_elite_radar"):
         return min(total, 59.0)
+    precision_config = scoring_config.get("recommendation_precision", {})
+    if precision_config.get("enabled", True) and not precision_gate.get("passed", True):
+        return min(total, float(precision_config.get("cap_failed_score", 69)))
     return total
+
+
+def _passes_recommendation_precision(paper: dict[str, Any], scoring_config: dict[str, Any] | None) -> bool:
+    precision_config = (scoring_config or {}).get("recommendation_precision")
+    if not precision_config or not precision_config.get("enabled", True):
+        return True
+    return bool(paper.get("precision_gate_passed", True))
+
+
+def _precision_gate_status(
+    *,
+    paper: dict[str, Any],
+    classification: dict[str, Any],
+    result_specificity_score: float,
+    matched_keywords: list[dict[str, Any]],
+    scoring_config: dict[str, Any],
+) -> dict[str, Any]:
+    precision_config = scoring_config.get("recommendation_precision")
+    if not precision_config or not precision_config.get("enabled", True):
+        return {"passed": True, "reason": "precision gate disabled"}
+
+    reasons: list[str] = []
+    personal_relevance = float(classification.get("personal_relevance_score") or 0)
+    min_personal_relevance = float(precision_config.get("min_personal_relevance", 50))
+    min_result_specificity = float(precision_config.get("min_result_specificity", 50))
+    min_observational_result_specificity = float(
+        precision_config.get("min_observational_result_specificity", min_result_specificity)
+    )
+    min_core_keyword_matches = int(precision_config.get("min_core_keyword_matches", 2))
+    core_keyword_matches = _core_keyword_match_count(matched_keywords)
+    has_direction_evidence = bool(classification.get("direction_evidence"))
+    study_type_tags = set(classification.get("study_type_tags") or [])
+
+    has_relevance_evidence = personal_relevance >= min_personal_relevance or core_keyword_matches >= min_core_keyword_matches
+    if not has_relevance_evidence:
+        reasons.append(
+            f"personal relevance {personal_relevance:.0f} < {min_personal_relevance:.0f} and core keyword hits {core_keyword_matches} < {min_core_keyword_matches}"
+        )
+    if precision_config.get("require_direction_evidence", True) and not (has_direction_evidence or core_keyword_matches >= min_core_keyword_matches):
+        reasons.append("no direction evidence snippet")
+    if result_specificity_score < min_result_specificity:
+        reasons.append(f"result specificity {result_specificity_score:.0f} < {min_result_specificity:.0f}")
+    if (
+        study_type_tags.intersection({"观察性研究", "人群队列", "公开数据库"})
+        and not study_type_tags.intersection({"系统综述", "Meta分析", "范围综述", "RCT"})
+        and result_specificity_score < min_observational_result_specificity
+    ):
+        reasons.append(
+            f"observational result specificity {result_specificity_score:.0f} < {min_observational_result_specificity:.0f}"
+        )
+    if (
+        precision_config.get("require_observational_effect_estimate", True)
+        and study_type_tags.intersection({"观察性研究", "人群队列", "公开数据库"})
+        and not study_type_tags.intersection({"系统综述", "Meta分析", "范围综述", "RCT"})
+        and not _has_effect_estimate_or_p_value(str(paper.get("abstract") or ""))
+    ):
+        reasons.append("observational abstract lacks effect estimate, CI, p value, or directional statistic")
+    if (
+        precision_config.get("exclude_demoted", True)
+        and classification.get("demote_reason")
+        and core_keyword_matches < min_core_keyword_matches
+    ):
+        reasons.append("demoted by relevance gate")
+    if precision_config.get("exclude_optional_reading", True) and result_specificity_score < 50:
+        reasons.append("optional reading because abstract lacks concrete results")
+
+    return {
+        "passed": not reasons,
+        "reason": "; ".join(reasons) if reasons else "passed",
+        "core_keyword_matches": core_keyword_matches,
+    }
+
+
+def _core_keyword_match_count(matched_keywords: list[dict[str, Any]]) -> int:
+    return sum(
+        1
+        for keyword in matched_keywords
+        if str(keyword.get("group") or "") in {"core_keywords", "keywords"}
+    )
+
+
+def _has_effect_estimate_or_p_value(text: str) -> bool:
+    if not text:
+        return False
+    return bool(
+        re.search(
+            r"\b("
+            r"odds ratio|hazard ratio|risk ratio|relative risk|confidence interval|"
+            r"95\s*%\s*ci|ci\b|p\s*[<=>]\s*0?\.\d+|beta|β|effect size|cohen|"
+            r"mean difference|standardized mean difference|smd|estimate"
+            r")\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _journal_score(
@@ -235,6 +352,7 @@ def _keyword_score(
                     "matched_term": matched_candidate,
                     "zh": keyword.get("zh") or keyword.get("term"),
                     "weight": keyword.get("weight", 1.0),
+                    "group": keyword.get("group"),
                 }
             )
 
@@ -316,6 +434,10 @@ def _result_specificity_score(paper: dict[str, Any]) -> float:
     if any(
         term in blob
         for term in [
+            "included studies",
+            "included trials",
+            "reported original data",
+            "directly assessed",
             "symptom duration",
             "pathogen",
             "training interruption",

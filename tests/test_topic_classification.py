@@ -140,6 +140,34 @@ class TopicClassificationTests(unittest.TestCase):
         self.assertIn("公开数据库", result["study_type_tags"])
         self.assertNotIn("动物实验", result["study_type_tags"])
 
+    def test_labral_cartilage_athlete_cohort_is_not_population_database(self):
+        result = self.classify(
+            "Longitudinal cohort study of the association between labral pathology and cartilage loss in high-impact athletes: the FORCe study.",
+            (
+                "Labral tears are common in young adults participating in high-impact physical activity. "
+                "This longitudinal cohort investigated labral tears and cartilage loss in athletes."
+            ),
+            journal="British Journal of Sports Medicine",
+        )
+
+        self.assertIn("运动医学", result["directions"])
+        self.assertIn("髋关节", result["directions"])
+        self.assertIn("软骨损伤", result["directions"])
+        self.assertNotIn("体力活动与公开数据库", result["directions"])
+        self.assertNotIn("动物实验", result["study_type_tags"])
+
+    def test_patellofemoral_strength_meta_is_rehab_not_muscle_omics(self):
+        result = self.classify(
+            "A Systematic Review with Meta-analysis of the Association between Changes in Muscle Strength and Clinical Outcome Changes in Patellofemoral Pain.",
+            "Randomised clinical trials reported muscle strength and clinical outcomes in people with patellofemoral pain.",
+            journal="Sports Medicine",
+        )
+
+        self.assertIn("肌骨康复", result["directions"])
+        self.assertIn("髌股疼痛", result["directions"])
+        self.assertIn("肌肉力量", result["directions"])
+        self.assertNotIn("肌肉表观遗传/多组学", result["directions"])
+
     def test_explicit_mice_signal_is_animal_model(self):
         result = self.classify(
             "High-fat diet-induced mice show skeletal muscle mitochondrial adaptations after exercise",

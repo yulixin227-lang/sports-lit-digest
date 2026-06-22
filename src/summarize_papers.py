@@ -350,6 +350,32 @@ def _summarize_systematic_review(
             "inspiration": "可用于设计游泳项目咖啡因补剂讨论框架：剂量、摄入时机、项目距离、训练状态和个体耐受性都应分开看。",
         }
 
+    if "patellofemoral pain" in blob and "muscle strength" in blob and ("meta-analysis" in blob or "meta analysis" in blob):
+        return {
+            "chinese_title": title,
+            "one_sentence_conclusion": (
+                "这篇系统综述与 Meta 分析纳入 82 项随机临床试验、4023 名髌股疼痛参与者，发现下肢肌力改善与疼痛减轻和功能改善相关，"
+                "提示膝关节和髋关节肌群力量训练在 PFP 康复中具有明确临床意义。"
+            ),
+            "why_read": (
+                "它直接回答康复实践中很常见的问题：髌股疼痛患者力量变强，是否真的对应疼痛和功能改善。"
+                "这比泛泛说“练力量有帮助”更有价值，因为摘要给出了纳入试验数量、样本量、相关方向和部分效应指标。"
+            ),
+            "review_question": "综述问题是：在髌股疼痛人群中，随机临床试验观察到的肌肉力量变化，是否与疼痛和身体功能的同步变化相关。",
+            "included_types": "纳入非手术、非药物干预的随机临床试验，且研究必须同时报告肌肉力量和至少一个临床结局（疼痛或功能）。",
+            "included_studies": "共筛查 16,750 条记录，最终纳入 82 项试验、4023 名参与者。",
+            "outcomes": "主要结局包括自评疼痛、身体功能，以及膝伸肌、膝屈肌、髋外展肌、髋内收肌、髋内/外旋肌和髋伸肌等力量变化。",
+            "pooled_effects": (
+                "疼痛方面，膝伸肌、膝屈肌和多个髋部肌群力量改善均与疼痛下降相关，例如髋外展肌 r=-0.91、β=-0.31，膝伸肌 r=-0.75、β=-0.21。"
+                "功能方面，膝伸肌、膝屈肌、髋外展肌、髋内收肌和髋内旋肌力量改善与功能提升相关，例如髋外展肌 r=0.94、β=0.15，膝伸肌 r=0.70、β=0.15。"
+            ),
+            "evidence_quality": "疼痛结局的证据确定性为低到中等；功能结局的证据确定性为低到高。仍需结合纳入研究质量和异质性解读。",
+            "author_conclusion": "作者认为，下肢肌肉力量改善与髌股疼痛患者疼痛减轻和身体功能改善相关，支持以膝和髋部肌群为重点的力量康复训练。",
+            "limitations": "摘要未详细列出局限性；从研究设计看，Meta 分析结论仍受纳入 RCT 的干预差异、测力方法、疼痛/功能量表和证据确定性影响。",
+            "my_judgment": "这篇比普通“力量训练有益”的综述更值得读，因为它把肌力变化和临床结局变化连接起来，适合 DPT、运动康复和髌股疼痛训练方案设计。",
+            "inspiration": "对康复实践：不要只看动作是否完成，还要追踪膝伸/屈肌与髋部肌群力量是否随疼痛和功能一起改善；对科研：可作为训练剂量、肌群选择和临床结局关联建模的参考。",
+        }
+
     if "irisin" in blob and "training" in blob and ("overweight" in blob or "obesity" in blob):
         return {
             "chinese_title": title,
@@ -430,6 +456,54 @@ def _summarize_observational_study(
     focus = _topic_phrase(keyword_labels)
     raw_context = " ".join([str(paper.get("title") or ""), methods, results, conclusion, str(paper.get("abstract") or "")])
     is_athlete_rts = _is_athlete_rts_infection(paper)
+    if _is_aware_x_study(paper) and _has_aware_x_detailed_results(paper):
+        return {
+            "chinese_title": title,
+            "one_sentence_conclusion": (
+                "AWARE X 前瞻性队列纳入 114 例病原体确认的运动员急性呼吸道感染，发现运动水平、病原体类型和发病时疾病严重程度与重返训练、"
+                "重返完整训练和重返完整表现所需时间相关，可为感染后复训和复赛决策提供具体风险线索。"
+            ),
+            "why_read": (
+                "这篇文章值得看，是因为它把急性呼吸道感染后的 return-to-sport 问题放在真实运动员队列中，用 PCR 确认病原体，并区分 RTT、RTFT、RTFP。"
+                "对教练、队医和运动康复人员来说，它比单纯“症状好了就恢复”更接近实际决策。"
+            ),
+            "research_question": "这项研究想知道：病原体确认的急性呼吸道感染后，哪些因素与运动员重返训练、重返完整训练和重返完整运动表现的时间相关。",
+            "participants": "前瞻性队列共纳入 114 例病原体确认的急性呼吸道感染运动员病例。",
+            "exposure": "主要暴露或分组变量包括运动参与水平、病原体类型（如流感、SARS-CoV-2、鼻病毒）和发病时疾病严重程度。",
+            "outcomes": "关键结局包括 RTT（重返训练）、RTFT（重返完整训练）和 RTFP（重返完整运动表现）所需天数。",
+            "associations": (
+                "RTT、RTFT、RTFP 的中位时间分别为 3.5 天、8 天和 11 天。业余运动员恢复更慢（HR 0.51-0.59，p≤0.03）；"
+                "流感和 SARS-CoV-2 相比鼻病毒恢复时间更长（HR 0.11-0.23，p≤0.003）；严重感染相比轻/中度感染恢复更慢（HR 0.17-0.31，p<0.0001）。"
+            ),
+            "causality": "这是观察性队列研究，能提供风险线索和预测信息，但不能把病原体类型或疾病严重程度解释为单一因果因素。",
+            "limitations": "摘要未详细列出局限性；需要阅读全文确认运动项目构成、随访完整性、模型协变量和不同病原体分层样本量。",
+            "my_judgment": "这篇适合作为运动员感染后 return-to-sport 风险筛查和随访管理的重点文献，信息量足够进入主推荐，但实践中仍要结合个体症状、心肺状态和队医评估。",
+            "inspiration": "对训练管理：复训决策可把病原体、疾病严重程度和运动员水平纳入随访表；对科研：适合发展为感染后复赛预测模型或前瞻性干预研究的变量框架。",
+        }
+    if _is_labral_cartilage_athlete_cohort(paper) and _has_labral_cartilage_detailed_results(paper):
+        return {
+            "chinese_title": title,
+            "one_sentence_conclusion": (
+                "FORCe 纵向队列纳入 173 名高冲击项目运动员（343 个髋关节），中位随访 2.1 年，发现基线前部髋臼盂唇撕裂、旁盂唇囊肿和盂唇总评分"
+                "与后续软骨流失存在弱到中等关联，提示髋关节结构损伤可能是运动员髋 OA 风险管理中的重要线索。"
+            ),
+            "why_read": (
+                "这篇文章值得看，是因为它关注的是高冲击运动员的髋关节长期结构变化，而不是泛泛的体力活动研究。"
+                "它对运动医学、DPT 和髋/腹股沟疼痛康复很实用：MRI 结构异常是否值得随访，不能只看有没有疼痛。"
+            ),
+            "research_question": "这项研究想知道：高冲击运动员的基线髋臼盂唇病变，是否与 2-3 年后的髋关节软骨流失相关。",
+            "participants": "纳入 173 名足球或澳式足球等高冲击项目运动员，共 343 个髋关节；82% 有髋和/或腹股沟疼痛，22% 为女性，中位年龄 26 岁。",
+            "exposure": "主要暴露包括基线盂唇撕裂、前部盂唇撕裂、旁盂唇囊肿、受累区域数量、最大盂唇评分和盂唇总评分。",
+            "outcomes": "主要结局是随访 MRI 中软骨总变化评分，用来反映髋关节软骨流失。",
+            "associations": (
+                "随访 MRI 中位间隔 2.1 年；87% 参与者随访时仍在进行高冲击体力活动。前部盂唇撕裂（aIRR 1.46，95%CI 1.01-2.09）、"
+                "旁盂唇囊肿（aIRR 1.38，95%CI 1.02-1.86）和盂唇总评分（aIRR 1.05，95%CI 1.00-1.09）与软骨流失弱到中等相关。"
+            ),
+            "causality": "这是纵向观察性队列，能提示结构损伤和软骨流失之间的风险关系，但不能单独证明盂唇病变导致软骨流失。",
+            "limitations": "摘要提示关联强度只是弱到中等，说明软骨流失还受其他因素影响；仍需阅读全文确认运动暴露、疼痛状态和影像评分可靠性。",
+            "my_judgment": "这篇适合 DPT、运动康复和运动医学方向精读，尤其适合思考髋关节 MRI 发现、疼痛、持续参赛和早期 OA 风险之间的关系。",
+            "inspiration": "对实践：高冲击运动员有髋/腹股沟疼痛或盂唇异常时，康复目标不应只看短期疼痛，还要考虑长期软骨健康；对科研：可发展为髋关节损伤随访和预防策略研究。",
+        }
     key_variables = _key_variable_text(raw_context)
     outcome_text = _outcomes_text(methods + " " + results + " " + str(paper.get("title") or ""))
     if is_athlete_rts:
@@ -583,6 +657,10 @@ def _translate_title(title: str, article_type_label: str, keyword_labels: list[s
         "caffeine" in normalized_title and "swimming performance" in normalized_title and "meta" in normalized_title
     ):
         return "咖啡因摄入对游泳表现影响的系统综述与多层级 Meta 分析"
+    if "patellofemoral pain" in normalized_title and "muscle strength" in normalized_title and "meta-analysis" in normalized_title:
+        return "肌肉力量变化与髌股疼痛临床结局变化关系的系统综述与 Meta 分析"
+    if "labral pathology" in normalized_title and "cartilage loss" in normalized_title and "high-impact athletes" in normalized_title:
+        return "高冲击运动员髋臼盂唇病变与软骨流失关系的纵向队列研究：FORCe 研究"
     if "irisin" in normalized_title and "training" in normalized_title and (
         "overweight" in normalized_title or "obesity" in normalized_title
     ):
@@ -930,6 +1008,41 @@ def _is_athlete_rts_infection(paper: dict[str, Any]) -> bool:
         ]
     )
     return has_athlete and has_rts and has_infection
+
+
+def _is_aware_x_study(paper: dict[str, Any]) -> bool:
+    blob = normalize_text(" ".join([str(paper.get("title") or ""), str(paper.get("abstract") or "")]))
+    return "aware x" in blob and _is_athlete_rts_infection(paper)
+
+
+def _has_aware_x_detailed_results(paper: dict[str, Any]) -> bool:
+    blob = normalize_text(str(paper.get("abstract") or ""))
+    return (
+        "114" in blob
+        and any(term in blob for term in ["hazard ratio", "hr", "hrs"])
+        and all(term in blob for term in ["return-to-training", "return-to-full-training", "return-to-full-performance"])
+    )
+
+
+def _is_labral_cartilage_athlete_cohort(paper: dict[str, Any]) -> bool:
+    blob = " " + normalize_text(
+        " ".join(
+            [
+                str(paper.get("title") or ""),
+                str(paper.get("abstract") or ""),
+                " ".join(paper.get("article_types") or []),
+            ]
+        )
+    ) + " "
+    has_labral = any(term in blob for term in [" labral pathology ", " labral tears ", " labral tear "])
+    has_cartilage = " cartilage loss " in blob
+    has_athlete = any(term in blob for term in [" athlete ", " athletes ", " high-impact physical activity "])
+    return has_labral and has_cartilage and has_athlete
+
+
+def _has_labral_cartilage_detailed_results(paper: dict[str, Any]) -> bool:
+    blob = normalize_text(str(paper.get("abstract") or ""))
+    return "173" in blob and "343 hips" in blob and any(term in blob for term in ["airr", "incidence rate ratio"])
 
 
 def _key_variable_text(text_raw: str) -> str:

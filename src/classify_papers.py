@@ -112,8 +112,13 @@ def classify_paper(
         elite_topic_score=elite_topic_score,
         elite_match=elite_match,
     )
-    is_elite_radar = bool(elite_match and _elite_topic_gate(blob) and personal_relevance_score >= 60)
     special_matches = _special_direction_matches(sources, blob)
+    if special_matches:
+        special_relevance = min(100, 35 + 10 * len(special_matches))
+        if any(tag in study_type_tags for tag in ["RCT", "系统综述", "Meta分析", "范围综述", "人群队列", "观察性研究"]):
+            special_relevance += 10
+        personal_relevance_score = max(personal_relevance_score, min(100, special_relevance))
+    is_elite_radar = bool(elite_match and _elite_topic_gate(blob) and personal_relevance_score >= 60)
     directions = [*[item["zh"] for item in special_matches], *[category["zh"] for category in matched_categories]]
     directions = list(dict.fromkeys(directions))
     if is_elite_radar and "顶刊雷达" not in directions:
@@ -372,7 +377,7 @@ def _category_gate(category_id: str, blob: str) -> bool:
             ]
         )
     if category_id == "muscle_omics":
-        if any(_term_in_blob(term, blob) for term in ["muscle strength", "grip strength", "muscle memory", "skeletal muscle", "resistance training", "hypertrophy", "atrophy", "sarcopenia"]):
+        if any(_term_in_blob(term, blob) for term in ["muscle memory", "myonuclei", "epigenetic memory"]):
             return True
         return any(_term_in_blob(term, blob) for term in OMICS_TERMS) and _omics_project_gate(blob)
     if category_id == "obesity_heterogeneity":
@@ -399,6 +404,8 @@ def _category_gate(category_id: str, blob: str) -> bool:
             ]
         )
     if category_id == "physical_activity_databases":
+        if _is_labral_cartilage_athlete_cohort(blob):
+            return False
         is_review = any(_term_in_blob(term, blob) for term in ["scoping review", "systematic review", "meta-analysis", "meta analysis"])
         has_physical_activity_signal = any(
             _term_in_blob(term, blob)
@@ -440,7 +447,24 @@ def _category_gate(category_id: str, blob: str) -> bool:
                 "population study",
             ]
         )
-        return has_physical_activity_signal and (has_database_or_device_signal or (has_population_signal and not is_review))
+        has_population_outcome_signal = any(
+            _term_in_blob(term, blob)
+            for term in [
+                "mortality",
+                "cardiovascular disease",
+                "diabetes",
+                "cancer",
+                "obesity",
+                "cardiometabolic",
+                "metabolic syndrome",
+                "accelerometer",
+                "device-measured",
+            ]
+        )
+        return has_physical_activity_signal and (
+            has_database_or_device_signal
+            or (has_population_signal and has_population_outcome_signal and not is_review)
+        )
     return True
 
 
@@ -546,6 +570,27 @@ def _special_direction_matches(sources: list[dict[str, str]], blob: str) -> list
                 {"zh": "人体研究", "evidence": evidence},
             ]
         )
+    if _is_labral_cartilage_athlete_cohort(blob):
+        evidence = _first_evidence(["labral pathology", "cartilage loss", "high-impact athletes", "FORCe"], sources)
+        matches.extend(
+            [
+                {"zh": "运动医学", "evidence": evidence},
+                {"zh": "运动员健康", "evidence": evidence},
+                {"zh": "髋关节", "evidence": evidence},
+                {"zh": "软骨损伤", "evidence": evidence},
+                {"zh": "运动员临床队列", "evidence": evidence},
+            ]
+        )
+    if _is_patellofemoral_strength_meta(blob):
+        evidence = _first_evidence(["patellofemoral pain", "muscle strength", "clinical outcome", "meta-analysis"], sources)
+        matches.extend(
+            [
+                {"zh": "肌骨康复", "evidence": evidence},
+                {"zh": "髌股疼痛", "evidence": evidence},
+                {"zh": "肌肉力量", "evidence": evidence},
+                {"zh": "疼痛与功能", "evidence": evidence},
+            ]
+        )
     if _is_athlete_rts_infection(blob):
         evidence = _first_evidence(["athletes", "return-to-sport", "acute respiratory infections"], sources)
         matches.extend(
@@ -608,6 +653,22 @@ def _is_masld_population_database(blob: str) -> bool:
 def _is_caffeine_swimming_meta(blob: str) -> bool:
     return _term_in_blob("caffeine", blob) and any(_term_in_blob(term, blob) for term in ["swimming", "swimming performance"]) and any(
         _term_in_blob(term, blob) for term in ["meta-analysis", "meta analysis", "systematic review"]
+    )
+
+
+def _is_patellofemoral_strength_meta(blob: str) -> bool:
+    return (
+        _term_in_blob("patellofemoral pain", blob)
+        and _term_in_blob("muscle strength", blob)
+        and any(_term_in_blob(term, blob) for term in ["meta-analysis", "meta analysis", "systematic review"])
+    )
+
+
+def _is_labral_cartilage_athlete_cohort(blob: str) -> bool:
+    return (
+        any(_term_in_blob(term, blob) for term in ["labral pathology", "labral tears", "labral tear"])
+        and _term_in_blob("cartilage loss", blob)
+        and any(_term_in_blob(term, blob) for term in ["athlete", "athletes", "high-impact physical activity"])
     )
 
 

@@ -449,7 +449,7 @@ def build_wechat_message(
             research_question = _paper_research_question(paper)
             key_result = _paper_key_result(paper)
             practice_value = _paper_practice_value(paper)
-            evidence_boundary = _brief_text(paper.get("evidence_strength") or "摘要中未提供。", 110)
+            evidence_boundary = _brief_text(paper.get("evidence_strength") or "摘要中未提供。", 150)
             lines.extend(
                 [
                     "————————————",
@@ -470,7 +470,7 @@ def build_wechat_message(
                     key_result,
                     "",
                     "【为什么值得看】",
-                    _brief_text(_paper_section(paper, "为什么值得看") or paper.get("top_pick_reason") or "摘要中未提供。", 110),
+                    _brief_text(_paper_section(paper, "为什么值得看") or paper.get("top_pick_reason") or "摘要中未提供。", 170),
                     "",
                     "【实践意义】",
                     practice_value,
@@ -737,9 +737,9 @@ def _paper_research_question(paper: dict[str, Any]) -> str:
         ],
     )
     if value:
-        return _brief_text(value, 115)
+        return _brief_text(value, 170)
     conclusion = paper.get("one_sentence_conclusion") or ""
-    return _brief_text(conclusion or "摘要中未提供。", 115)
+    return _brief_text(conclusion or "摘要中未提供。", 170)
 
 
 def _paper_key_result(paper: dict[str, Any]) -> str:
@@ -755,10 +755,10 @@ def _paper_key_result(paper: dict[str, Any]) -> str:
         ],
     )
     if value:
-        return _brief_text(value, 125)
+        return _brief_text(value, 260)
     conclusion = paper.get("one_sentence_conclusion") or ""
     if conclusion:
-        return _brief_text(conclusion, 125)
+        return _brief_text(conclusion, 260)
     return "摘要中未提供具体结果。"
 
 
@@ -773,10 +773,10 @@ def _paper_practice_value(paper: dict[str, Any]) -> str:
         ],
     )
     if value:
-        return _brief_text(value, 125)
+        return _brief_text(value, 190)
     if paper.get("relation_to_me"):
-        return _brief_text(paper.get("relation_to_me"), 125)
-    return _brief_text(paper.get("my_judgment") or "摘要中未提供。", 125)
+        return _brief_text(paper.get("relation_to_me"), 190)
+    return _brief_text(paper.get("my_judgment") or "摘要中未提供。", 190)
 
 
 def _brief_text(value: Any, limit: int) -> str:
@@ -786,6 +786,10 @@ def _brief_text(value: Any, limit: int) -> str:
     sentence_match = re.match(r"^(.{20,}?[。！？.!?])", text)
     if sentence_match and len(sentence_match.group(1)) <= limit:
         return sentence_match.group(1)
+    for delimiter in ["。", "；", ";", "，", ",", "、"]:
+        position = text.rfind(delimiter, 0, limit)
+        if position >= 40:
+            return text[: position + 1].strip()
     return _truncate_text(text, limit)
 
 
