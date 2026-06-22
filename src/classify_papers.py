@@ -9,18 +9,83 @@ from .utils import normalize_text
 
 MISSING = "摘要中未提供"
 ANIMAL_MODEL_TERMS = [
+    "high-fat diet-induced mice",
+    "diet-induced obesity mouse",
     "mouse",
     "mice",
-    "rat",
     "rats",
+    "rat",
     "murine",
     "animal model",
+    "animal study",
     "rodent",
     "swine",
+    "pig",
     "rabbit",
     "zebrafish",
     "drosophila",
     "c elegans",
+]
+
+ANIMAL_MODEL_BLOCKERS = [
+    "meta-analysis",
+    "meta analysis",
+    "systematic review",
+    "cohort",
+    "uk biobank",
+    "nhanes",
+    "athlete",
+    "athletes",
+    "human",
+    "participants",
+    "adults",
+    "electromyography",
+    "swimming performance",
+]
+
+ELITE_CORE_TOPIC_TERMS = [
+    "exercise",
+    "physical activity",
+    "training",
+    "sedentary behavior",
+    "skeletal muscle",
+    "muscle regeneration",
+    "muscle stem cell",
+    "satellite cell",
+    "sarcopenia",
+    "hypertrophy",
+    "atrophy",
+    "obesity",
+    "adipose tissue",
+    "metabolic health",
+    "insulin resistance",
+    "lipid metabolism",
+    "nutrition",
+    "dietary intervention",
+    "protein",
+    "creatine",
+    "caffeine",
+    "fatty acid",
+    "human performance",
+    "cardiorespiratory fitness",
+    "vo2max",
+    "vo2 max",
+]
+
+OMICS_TERMS = [
+    "omics",
+    "multi-omics",
+    "proteomics",
+    "proteomic",
+    "metabolomics",
+    "metabolomic",
+    "rna-seq",
+    "atac-seq",
+    "single-cell",
+    "scrna-seq",
+    "snrna-seq",
+    "dna methylation",
+    "spatial transcriptomics",
 ]
 
 
@@ -34,8 +99,9 @@ def classify_paper(
     elite_journals_config = elite_journals_config or {}
     keywords_config = keywords_config or {}
     blob = _paper_blob(paper)
+    sources = _source_texts(paper)
 
-    matched_categories = _matched_categories(blob, categories_config)
+    matched_categories = _matched_categories(sources, categories_config)
     study_type_tags = _study_type_tags(blob)
     data_sources = _data_sources(blob)
     elite_match = _is_elite_journal(paper, elite_journals_config)
@@ -46,16 +112,21 @@ def classify_paper(
         elite_topic_score=elite_topic_score,
         elite_match=elite_match,
     )
-    is_elite_radar = bool(elite_match and personal_relevance_score >= 60)
-    directions = [*_special_directions(blob), *[category["zh"] for category in matched_categories]]
+    is_elite_radar = bool(elite_match and _elite_topic_gate(blob) and personal_relevance_score >= 60)
+    special_matches = _special_direction_matches(sources, blob)
+    directions = [*[item["zh"] for item in special_matches], *[category["zh"] for category in matched_categories]]
     directions = list(dict.fromkeys(directions))
     if is_elite_radar and "顶刊雷达" not in directions:
         directions.append("顶刊雷达")
+    direction_evidence = _direction_evidence(special_matches, matched_categories, is_elite_radar, blob)
+    demote_reason = _demote_reason(blob, directions, bool(elite_match), bool(is_elite_radar))
 
     return {
         "directions": directions,
         "direction_display": " / ".join(directions) if directions else "未明确分类",
+        "direction_evidence": direction_evidence,
         "matched_categories": matched_categories,
+        "has_category_config": bool(categories_config.get("categories")),
         "study_type_tags": study_type_tags,
         "study_type_display": " / ".join(study_type_tags) if study_type_tags else "未明确研究类型",
         "data_sources": data_sources,
@@ -64,26 +135,35 @@ def classify_paper(
         "is_elite_radar": is_elite_radar,
         "elite_radar_display": "是" if is_elite_radar else "否",
         "personal_relevance_score": personal_relevance_score,
-        "relation_to_me": _relation_to_me(directions, study_type_tags, data_sources, is_elite_radar),
+        "demote_reason": demote_reason,
+        "relevance_gate_passed": bool(directions),
+        "relation_to_me": _relation_to_me(directions, study_type_tags, data_sources, is_elite_radar, blob, demote_reason),
     }
 
 
-def _matched_categories(blob: str, categories_config: dict[str, Any]) -> list[dict[str, Any]]:
+def _matched_categories(sources: list[dict[str, str]], categories_config: dict[str, Any]) -> list[dict[str, Any]]:
+    blob = normalize_text(" ".join(source["text"] for source in sources))
     matched: list[dict[str, Any]] = []
     for category in categories_config.get("categories", []) or []:
         if category.get("id") == "elite_journal_radar":
             continue
+        category_id = str(category.get("id") or "")
         keywords = category.get("keywords") or []
         hit_terms = [term for term in keywords if _term_in_blob(term, blob)]
         anchor_terms = category.get("anchor_keywords") or keywords
-        has_anchor = any(_term_in_blob(term, blob) for term in anchor_terms)
-        if hit_terms and has_anchor:
+        anchor_hits = [term for term in anchor_terms if _term_in_blob(term, blob)]
+        if hit_terms and anchor_hits and _category_gate(category_id, blob):
+            evidence = [_evidence_snippet(term, sources) for term in anchor_hits[:3]]
+            evidence = [item for item in evidence if item]
+            if not evidence:
+                continue
             matched.append(
                 {
-                    "id": category.get("id") or "",
+                    "id": category_id,
                     "zh": category.get("zh") or category.get("name") or category.get("id") or "未命名方向",
                     "en": category.get("en") or "",
                     "terms": hit_terms[:8],
+                    "evidence_snippets": evidence,
                 }
             )
     return matched
@@ -91,11 +171,23 @@ def _matched_categories(blob: str, categories_config: dict[str, Any]) -> list[di
 
 def _study_type_tags(blob: str) -> list[str]:
     tags: list[str] = []
+    is_scoping_review = _term_in_blob("scoping review", blob)
+    is_systematic_review = _term_in_blob("systematic review", blob)
+    is_meta_analysis = _term_in_blob("meta-analysis", blob) or _term_in_blob("meta analysis", blob)
+    is_review = is_scoping_review or is_systematic_review or is_meta_analysis
+    if is_scoping_review:
+        tags.append("范围综述")
     if any(_term_in_blob(term, blob) for term in ["uk biobank", "nhanes", "china kadoorie biobank", "biobank japan", "all of us"]):
         tags.append("公开数据库")
-    if any(_term_in_blob(term, blob) for term in ["cohort", "prospective cohort", "longitudinal cohort", "population study", "epidemiology"]) or _is_athlete_rts_infection(blob):
+    if not is_review and (
+        any(_term_in_blob(term, blob) for term in ["cohort", "prospective cohort", "longitudinal cohort", "population study", "epidemiology"])
+        or _is_athlete_rts_infection(blob)
+    ):
         tags.append("人群队列")
-    if any(_term_in_blob(term, blob) for term in ["observational study", "observational", "prospective", "cross sectional", "cross-sectional", "case control", "case-control"]) or _is_athlete_rts_infection(blob):
+    if not is_review and (
+        any(_term_in_blob(term, blob) for term in ["observational study", "observational", "prospective", "cross sectional", "cross-sectional", "case control", "case-control"])
+        or _is_athlete_rts_infection(blob)
+    ):
         tags.append("观察性研究")
     if any(_term_in_blob(term, blob) for term in ["randomized controlled trial", "randomised controlled trial", "clinical trial", "randomized trial", "controlled trial"]):
         tags.append("RCT")
@@ -105,17 +197,18 @@ def _study_type_tags(blob: str) -> list[str]:
         tags.append("细胞实验")
     if any(_term_in_blob(term, blob) for term in ["mechanism", "mechanistic", "pathway", "mitochondrial function", "skeletal muscle mechanism"]):
         tags.append("机制研究")
-    if any(_term_in_blob(term, blob) for term in ["omics", "multi-omics", "rna-seq", "atac-seq", "single-cell", "scrna-seq", "snrna-seq", "proteomics", "metabolomics", "dna methylation", "spatial transcriptomics"]):
+    if any(_term_in_blob(term, blob) for term in OMICS_TERMS) and _omics_project_gate(blob):
         tags.append("多组学")
-    if _term_in_blob("systematic review", blob):
+    if is_systematic_review:
         tags.append("系统综述")
-    if _term_in_blob("meta-analysis", blob) or _term_in_blob("meta analysis", blob):
+    if is_meta_analysis:
         tags.append("Meta分析")
     return list(dict.fromkeys(tags))
 
 
 def _data_sources(blob: str) -> list[str]:
     sources = []
+    is_review = any(_term_in_blob(term, blob) for term in ["scoping review", "systematic review", "meta-analysis", "meta analysis"])
     if _is_athlete_rts_infection(blob):
         sources.append("运动员临床队列")
     for term, label in [
@@ -126,23 +219,13 @@ def _data_sources(blob: str) -> list[str]:
         ("all of us", "All of Us"),
         ("clinical cohort", "临床队列"),
         ("cohort", "队列研究"),
-        ("mouse", "动物实验"),
-        ("mice", "动物实验"),
-        ("rat", "动物实验"),
-        ("rats", "动物实验"),
-        ("murine", "动物实验"),
-        ("animal model", "动物实验"),
-        ("rodent", "动物实验"),
-        ("swine", "动物实验"),
-        ("rabbit", "动物实验"),
-        ("zebrafish", "动物实验"),
-        ("drosophila", "动物实验"),
-        ("c elegans", "动物实验"),
         ("cell culture", "细胞实验"),
         ("in vitro", "细胞实验"),
     ]:
-        if _term_in_blob(term, blob):
+        if _term_in_blob(term, blob) and not (is_review and label in {"队列研究", "临床队列"}):
             sources.append(label)
+    if _has_animal_model_signal(blob):
+        sources.append("动物实验")
     return list(dict.fromkeys(sources))
 
 
@@ -170,6 +253,8 @@ def _elite_topic_score(
     categories_config: dict[str, Any],
     elite_journals_config: dict[str, Any] | None = None,
 ) -> int:
+    if not _elite_topic_gate(blob):
+        return 0
     elite_journals_config = elite_journals_config or {}
     terms = list(elite_journals_config.get("required_topic_terms") or [])
     if not terms:
@@ -193,7 +278,7 @@ def _personal_relevance_score(
     if any(tag in study_type_tags for tag in ["公开数据库", "RCT", "人群队列", "观察性研究", "多组学", "动物实验"]):
         score += 10
     if elite_match and elite_topic_score:
-        score += min(20, 5 * elite_topic_score)
+        score += 50 + min(20, 5 * elite_topic_score)
     return max(0, min(100, score))
 
 
@@ -202,7 +287,21 @@ def _relation_to_me(
     study_type_tags: list[str],
     data_sources: list[str],
     is_elite_radar: bool,
+    blob: str,
+    demote_reason: str = "",
 ) -> str:
+    if demote_reason:
+        return demote_reason
+    if all(label in directions for label in ["运动干预", "肥胖", "肌因子"]):
+        return "这篇直接讨论超重/肥胖人群中不同训练方式与 irisin 等肌因子变化，可用于理解运动干预、肥胖代谢和肌因子之间的关系。"
+    if all(label in directions for label in ["公开数据库", "心代谢风险", "MASLD"]):
+        return "这篇用公开数据库队列分析 MASLD 或心代谢多病风险，可作为数据库研究设计和风险建模参考；如果没有运动暴露，和运动干预的关系较弱。"
+    if all(label in directions for label in ["运动营养", "运动表现"]):
+        return "这篇直接讨论补剂或营养摄入对竞技表现的影响，适合运动营养方向和比赛补剂策略讨论。"
+    if all(label in directions for label in ["肌电图", "神经肌肉控制"]):
+        return "这篇关注人体肌电和局部肌肉疲劳，适合连接神经肌肉控制、肩部功能评估和康复训练设计。"
+    if _is_athlete_rts_infection(blob):
+        return "这篇聚焦运动员感染后恢复训练和重返运动，适合队医、教练和运动康复人员做复赛风险筛查参考。"
     if not directions and not study_type_tags:
         return "这篇文章与当前扩展方向的关系不够明确，建议先作为候选文献保留。"
 
@@ -215,7 +314,173 @@ def _relation_to_me(
         pieces.append("研究类型可标记为" + "、".join(study_type_tags[:3]))
     if is_elite_radar:
         pieces.append("同时来自 Nature/Cell/Science 相关重点期刊，适合作为顶刊雷达条目重点跟踪")
-    return "；".join(pieces) + "。这有助于连接运动科学、DPT 申请、肥胖代谢、肌肉机制或运动营养选题。"
+    return "；".join(pieces) + "。建议根据全文结果判断它是否能服务于具体训练、康复、代谢或运动营养问题。"
+
+
+def _source_texts(paper: dict[str, Any]) -> list[dict[str, str]]:
+    semantic = paper.get("semantic_scholar") or {}
+    items = [
+        ("title", paper.get("title")),
+        ("abstract", paper.get("abstract")),
+        ("journal", paper.get("journal")),
+        ("journal", paper.get("journal_abbreviation")),
+        ("publication type", " ".join(paper.get("article_types") or [])),
+        ("venue", semantic.get("venue")),
+        ("semantic journal", semantic.get("journal")),
+    ]
+    return [{"source": source, "text": str(text)} for source, text in items if str(text or "").strip()]
+
+
+def _category_gate(category_id: str, blob: str) -> bool:
+    if category_id == "sports_nutrition":
+        return any(
+            _term_in_blob(term, blob)
+            for term in [
+                "sports nutrition",
+                "protein supplementation",
+                "whey protein",
+                "creatine",
+                "caffeine",
+                "nitrate",
+                "beta-alanine",
+                "ergogenic aid",
+                "carbohydrate periodization",
+                "muscle protein synthesis",
+                "leucine",
+                "bcaa",
+            ]
+        )
+    if category_id == "dietary_fat_weight_loss":
+        return any(
+            _term_in_blob(term, blob)
+            for term in [
+                "dietary fat",
+                "fatty acid",
+                "olive oil",
+                "fish oil",
+                "omega-3",
+                "omega-6",
+                "saturated fat",
+                "unsaturated fat",
+                "medium-chain triglyceride",
+                " mct ",
+                "high-fat diet",
+                "ketogenic diet",
+                "low-fat diet",
+                "fat loss",
+                "lipid metabolism",
+            ]
+        )
+    if category_id == "muscle_omics":
+        if any(_term_in_blob(term, blob) for term in ["muscle strength", "grip strength", "muscle memory", "skeletal muscle", "resistance training", "hypertrophy", "atrophy", "sarcopenia"]):
+            return True
+        return any(_term_in_blob(term, blob) for term in OMICS_TERMS) and _omics_project_gate(blob)
+    if category_id == "obesity_heterogeneity":
+        return any(
+            _term_in_blob(term, blob)
+            for term in [
+                "obesity heterogeneity",
+                "obesity phenotype",
+                "obesity subtype",
+                "metabolically healthy obesity",
+                "metabolically unhealthy obesity",
+                "adiposity phenotype",
+                "fat distribution",
+                "visceral fat",
+                "subcutaneous fat",
+                "ectopic fat",
+                "adipose tissue",
+                "body composition",
+                "obesity cluster",
+                "latent class analysis",
+                "unsupervised clustering",
+                "diet-induced obesity",
+                "high-fat diet",
+            ]
+        )
+    if category_id == "physical_activity_databases":
+        is_review = any(_term_in_blob(term, blob) for term in ["scoping review", "systematic review", "meta-analysis", "meta analysis"])
+        has_physical_activity_signal = any(
+            _term_in_blob(term, blob)
+            for term in [
+                "physical activity",
+                "sedentary behavior",
+                "accelerometer",
+                "device-measured physical activity",
+                "wearable",
+                "step count",
+                "moderate-to-vigorous physical activity",
+                "mvpa",
+                "light physical activity",
+                "cardiorespiratory fitness",
+            ]
+        )
+        has_database_or_device_signal = any(
+            _term_in_blob(term, blob)
+            for term in [
+                "uk biobank",
+                "nhanes",
+                "china kadoorie biobank",
+                "biobank japan",
+                "all of us",
+                "accelerometer",
+                "device-measured physical activity",
+                "wearable",
+                "step count",
+                "moderate-to-vigorous physical activity",
+                "mvpa",
+                "sedentary behavior",
+            ]
+        )
+        has_population_signal = any(
+            _term_in_blob(term, blob)
+            for term in [
+                "cohort",
+                "epidemiology",
+                "population study",
+            ]
+        )
+        return has_physical_activity_signal and (has_database_or_device_signal or (has_population_signal and not is_review))
+    return True
+
+
+def _evidence_snippet(term: Any, sources: list[dict[str, str]]) -> str:
+    normalized = normalize_text(term)
+    if not normalized:
+        return ""
+    for item in sources:
+        if _term_in_blob(normalized, normalize_text(item["text"])):
+            text = " ".join(str(item["text"]).split())
+            if len(text) > 180:
+                text = text[:177].rstrip() + "..."
+            return f"{item['source']}: {text}"
+    return ""
+
+
+def _direction_evidence(
+    special_matches: list[dict[str, Any]],
+    matched_categories: list[dict[str, Any]],
+    is_elite_radar: bool,
+    blob: str,
+) -> dict[str, list[str]]:
+    evidence: dict[str, list[str]] = {}
+    for item in special_matches:
+        evidence[item["zh"]] = [str(item.get("evidence") or "title/abstract evidence")]
+    for category in matched_categories:
+        evidence[category["zh"]] = list(category.get("evidence_snippets") or [])
+    if is_elite_radar:
+        evidence["顶刊雷达"] = ["journal + topic gate: " + ", ".join(_elite_topic_hits(blob)[:4])]
+    return evidence
+
+
+def _demote_reason(blob: str, directions: list[str], is_elite_journal: bool, is_elite_radar: bool) -> str:
+    if _is_ptsd_multisystem_omics(blob) and not directions:
+        return "这篇主要是 PTSD 相关多系统疾病/衰老的组学研究，摘要未显示与运动、肌肉、肥胖、营养或代谢干预的明确关联，因此不建议进入主推荐。"
+    if is_elite_journal and not is_elite_radar:
+        return "这篇来自 Nature/Cell/Science 相关期刊，但摘要未通过运动、肌肉、肥胖/脂肪组织、营养或运动表现主题门槛，适合作为可选观察而不是主推荐。"
+    if not directions:
+        return "摘要没有提供足够证据把它归入本项目的核心方向，建议仅作可选观察。"
+    return ""
 
 
 def _paper_blob(paper: dict[str, Any]) -> str:
@@ -231,10 +496,81 @@ def _paper_blob(paper: dict[str, Any]) -> str:
     return normalize_text(" ".join(str(value or "") for value in values))
 
 
-def _special_directions(blob: str) -> list[str]:
+def _special_direction_matches(sources: list[dict[str, str]], blob: str) -> list[dict[str, str]]:
+    matches: list[dict[str, str]] = []
+    if _is_glp1_oa_weight_loss(blob):
+        evidence = _first_evidence(["glp-1 receptor agonists", "weight-loss strategies", "osteoarthritis", "obesity"], sources)
+        matches.extend(
+            [
+                {"zh": "肥胖", "evidence": evidence},
+                {"zh": "骨关节炎", "evidence": evidence},
+                {"zh": "减重策略", "evidence": evidence},
+                {"zh": "肌骨康复", "evidence": evidence},
+            ]
+        )
+    if _is_irisin_training_obesity(blob):
+        evidence = _first_evidence(["irisin", "training", "overweight", "obesity"], sources)
+        matches.extend(
+            [
+                {"zh": "运动干预", "evidence": evidence},
+                {"zh": "肥胖", "evidence": evidence},
+                {"zh": "肌因子", "evidence": evidence},
+            ]
+        )
+    if _is_masld_population_database(blob):
+        evidence = _first_evidence(["masld", "uk biobank", "c-reactive protein-triglyceride-glucose"], sources)
+        matches.extend(
+            [
+                {"zh": "公开数据库", "evidence": evidence},
+                {"zh": "心代谢风险", "evidence": evidence},
+                {"zh": "MASLD", "evidence": evidence},
+                {"zh": "队列研究", "evidence": evidence},
+            ]
+        )
+    if _is_caffeine_swimming_meta(blob):
+        evidence = _first_evidence(["caffeine", "swimming performance", "meta-analysis"], sources)
+        matches.extend(
+            [
+                {"zh": "运动营养", "evidence": evidence},
+                {"zh": "运动表现", "evidence": evidence},
+            ]
+        )
+    if _is_emg_shoulder_fatigue(blob):
+        evidence = _first_evidence(["electromyography", "rotator cuff", "deltoid", "fatigue"], sources)
+        matches.extend(
+            [
+                {"zh": "肌电图", "evidence": evidence},
+                {"zh": "神经肌肉控制", "evidence": evidence},
+                {"zh": "疲劳", "evidence": evidence},
+                {"zh": "肩部肌群", "evidence": evidence},
+                {"zh": "人体研究", "evidence": evidence},
+            ]
+        )
     if _is_athlete_rts_infection(blob):
-        return ["运动医学", "运动员健康", "呼吸道感染", "重返运动"]
-    return []
+        evidence = _first_evidence(["athletes", "return-to-sport", "acute respiratory infections"], sources)
+        matches.extend(
+            [
+                {"zh": "运动医学", "evidence": evidence},
+                {"zh": "运动员健康", "evidence": evidence},
+                {"zh": "呼吸道感染", "evidence": evidence},
+                {"zh": "重返运动", "evidence": evidence},
+            ]
+        )
+    deduped: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in matches:
+        if item["zh"] not in seen and item.get("evidence"):
+            seen.add(item["zh"])
+            deduped.append(item)
+    return deduped
+
+
+def _first_evidence(terms: list[str], sources: list[dict[str, str]]) -> str:
+    for term in terms:
+        snippet = _evidence_snippet(term, sources)
+        if snippet:
+            return snippet
+    return ""
 
 
 def _is_athlete_rts_infection(blob: str) -> bool:
@@ -247,8 +583,88 @@ def _is_athlete_rts_infection(blob: str) -> bool:
     return has_athlete and has_rts and has_infection
 
 
+def _is_irisin_training_obesity(blob: str) -> bool:
+    return _term_in_blob("irisin", blob) and any(_term_in_blob(term, blob) for term in ["training", "exercise"]) and any(
+        _term_in_blob(term, blob) for term in ["overweight", "obesity", "obese"]
+    )
+
+
+def _is_glp1_oa_weight_loss(blob: str) -> bool:
+    return (
+        (_term_in_blob("glp-1 receptor agonists", blob) or _term_in_blob("glp-1", blob))
+        and (_term_in_blob("osteoarthritis", blob) or _term_in_blob("oa", blob))
+        and (_term_in_blob("weight-loss strategies", blob) or _term_in_blob("weight loss", blob))
+    )
+
+
+def _is_masld_population_database(blob: str) -> bool:
+    return _term_in_blob("masld", blob) and (
+        any(_term_in_blob(term, blob) for term in ["uk biobank", "nhanes", "cohort"])
+        or "c reactive protein triglyceride glucose" in blob
+        or "c-reactive protein-triglyceride-glucose" in blob
+    )
+
+
+def _is_caffeine_swimming_meta(blob: str) -> bool:
+    return _term_in_blob("caffeine", blob) and any(_term_in_blob(term, blob) for term in ["swimming", "swimming performance"]) and any(
+        _term_in_blob(term, blob) for term in ["meta-analysis", "meta analysis", "systematic review"]
+    )
+
+
+def _is_emg_shoulder_fatigue(blob: str) -> bool:
+    return any(_term_in_blob(term, blob) for term in ["electromyography", "emg", "surface electromyography"]) and any(
+        _term_in_blob(term, blob) for term in ["rotator cuff", "deltoid", "shoulder"]
+    ) and _term_in_blob("fatigue", blob)
+
+
+def _is_ptsd_multisystem_omics(blob: str) -> bool:
+    return _term_in_blob("ptsd", blob) and any(_term_in_blob(term, blob) for term in ["proteomic", "proteomics", "metabolomic", "metabolomics", "multi-omics"]) and any(
+        _term_in_blob(term, blob) for term in ["multisystem disease", "accelerated aging", "redox-metabolic"]
+    )
+
+
 def _has_animal_model_signal(blob: str) -> bool:
+    if any(_term_in_blob(term, blob) for term in ANIMAL_MODEL_BLOCKERS):
+        return False
     return any(_term_in_blob(term, blob) for term in ANIMAL_MODEL_TERMS)
+
+
+def _omics_project_gate(blob: str) -> bool:
+    if not any(_term_in_blob(term, blob) for term in OMICS_TERMS):
+        return False
+    return any(
+        _term_in_blob(term, blob)
+        for term in [
+            "skeletal muscle",
+            "muscle",
+            "exercise",
+            "training",
+            "obesity",
+            "adipose",
+            "adipose tissue",
+            "resistance training",
+            "sarcopenia",
+            "hypertrophy",
+            "atrophy",
+        ]
+    )
+
+
+def _elite_topic_gate(blob: str) -> bool:
+    if any(_term_in_blob(term, blob) for term in ELITE_CORE_TOPIC_TERMS):
+        return True
+    if any(_term_in_blob(term, blob) for term in ["epigenetics", *OMICS_TERMS]) and any(
+        _term_in_blob(term, blob) for term in ["skeletal muscle", "exercise", "physical activity", "obesity", "adipose tissue", "adipose"]
+    ):
+        return True
+    return False
+
+
+def _elite_topic_hits(blob: str) -> list[str]:
+    hits = [term for term in ELITE_CORE_TOPIC_TERMS if _term_in_blob(term, blob)]
+    if any(_term_in_blob(term, blob) for term in ["epigenetics", *OMICS_TERMS]) and _omics_project_gate(blob):
+        hits.append("omics + project topic")
+    return list(dict.fromkeys(hits))
 
 
 def _term_in_blob(term: Any, blob: str) -> bool:

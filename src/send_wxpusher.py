@@ -445,37 +445,38 @@ def build_wechat_message(
     if papers:
         for index, paper in enumerate(papers, 1):
             metrics = _paper_journal_metrics(paper)
+            data_summary = _paper_data_summary(paper)
+            research_question = _paper_research_question(paper)
+            key_result = _paper_key_result(paper)
+            practice_value = _paper_practice_value(paper)
+            evidence_boundary = _brief_text(paper.get("evidence_strength") or "摘要中未提供。", 110)
             lines.extend(
                 [
                     "————————————",
                     f"【文章 {index}】",
                     str(paper.get("chinese_title") or "标题待补全"),
                     f"英文原题：{_truncate_text(paper.get('english_title') or paper.get('title') or '摘要中未提供', 96)}",
-                    f"期刊：{metrics['display_name']}",
-                    f"JCR：{metrics['jcr_quartile']}",
-                    f"中科院：{metrics['cas_zone']}",
-                    f"IF：{metrics['impact_factor']}",
-                    f"本篇方向：{paper.get('direction_display') or '未明确分类'}",
-                    f"研究类型：{paper.get('study_type_display') or '未明确研究类型'}",
-                    f"文章类型：{paper.get('article_type_label', '类型待补全')}",
-                    f"推荐指数：{paper.get('stars') or paper.get('recommendation_index', '待评估')}",
-                    f"质量评分：{paper.get('score', '待评估')}/100",
+                    f"期刊：{metrics['display_name']}｜JCR：{metrics['jcr_quartile']}｜中科院：{metrics['cas_zone']}｜IF：{metrics['impact_factor']}",
+                    f"方向：{paper.get('direction_display') or '未明确分类'}",
+                    f"研究类型：{paper.get('study_type_display') or paper.get('article_type_label') or '未明确研究类型'}",
+                    f"数据/样本：{data_summary}",
+                    f"推荐指数：{paper.get('stars') or paper.get('recommendation_index', '待评估')}｜质量评分：{paper.get('score', '待评估')}/100",
                     f"阅读优先级：{paper.get('reading_priority') or '推荐阅读'}",
-                    f"结果具体性：{paper.get('result_specificity_display') or '未评估'}",
-                    f"具体研究问题：{_brief_text(_paper_section(paper, '研究问题') or '摘要中未提供。', 90)}",
-                    f"关键结局：{_brief_text(_paper_section(paper, '结局指标') or _paper_section(paper, '测试指标') or '摘要中未提供。', 90)}",
                     "",
-                    "【一句话结论】",
-                    str(paper.get("one_sentence_conclusion") or "摘要中未提供。"),
+                    "【研究问题】",
+                    research_question,
                     "",
-                    "【证据强度提醒】",
-                    _brief_text(paper.get("evidence_strength") or "摘要中未提供。", 90),
+                    "【核心发现】",
+                    key_result,
                     "",
                     "【为什么值得看】",
                     _brief_text(_paper_section(paper, "为什么值得看") or paper.get("top_pick_reason") or "摘要中未提供。", 110),
                     "",
-                    "【实践价值】",
-                    _brief_text(_paper_section(paper, "实践启发") or _paper_section(paper, "对我的启发") or paper.get("my_judgment") or "摘要中未提供。", 110),
+                    "【实践意义】",
+                    practice_value,
+                    "",
+                    "【证据边界】",
+                    evidence_boundary,
                     "",
                 ]
             )
@@ -694,6 +695,88 @@ def _paper_section(paper: dict[str, Any], label: str) -> str:
         if section.get("label") == label:
             return str(section.get("value") or "").strip()
     return ""
+
+
+def _paper_first_section(paper: dict[str, Any], labels: list[str]) -> str:
+    for label in labels:
+        value = _paper_section(paper, label)
+        if value:
+            return value
+    return ""
+
+
+def _paper_data_summary(paper: dict[str, Any]) -> str:
+    data_source = str(paper.get("data_source_display") or "").strip()
+    sample_or_source = _paper_first_section(
+        paper,
+        [
+            "研究对象",
+            "研究对象 / 纳入标准",
+            "纳入研究数量 / 样本量",
+            "纳入研究数量",
+            "数据来源",
+            "研究对象 / 样本来源",
+        ],
+    )
+    if data_source and data_source != "摘要中未提供":
+        if sample_or_source and "摘要中未提供" not in sample_or_source:
+            return _brief_text(f"{data_source}；{sample_or_source}", 100)
+        return _brief_text(data_source, 100)
+    return _brief_text(sample_or_source or "摘要中未提供。", 100)
+
+
+def _paper_research_question(paper: dict[str, Any]) -> str:
+    value = _paper_first_section(
+        paper,
+        [
+            "研究问题",
+            "综述问题",
+            "这篇综述在梳理什么问题",
+            "研究设计 / 综述方法",
+            "研究设计",
+        ],
+    )
+    if value:
+        return _brief_text(value, 115)
+    conclusion = paper.get("one_sentence_conclusion") or ""
+    return _brief_text(conclusion or "摘要中未提供。", 115)
+
+
+def _paper_key_result(paper: dict[str, Any]) -> str:
+    value = _paper_first_section(
+        paper,
+        [
+            "主要结果",
+            "主要关联结果",
+            "合并效应或主要发现",
+            "主要发现",
+            "目前证据缺口",
+            "研究主题分布",
+        ],
+    )
+    if value:
+        return _brief_text(value, 125)
+    conclusion = paper.get("one_sentence_conclusion") or ""
+    if conclusion:
+        return _brief_text(conclusion, 125)
+    return "摘要中未提供具体结果。"
+
+
+def _paper_practice_value(paper: dict[str, Any]) -> str:
+    value = _paper_first_section(
+        paper,
+        [
+            "实践启发",
+            "实践价值",
+            "对我的启发",
+            "对训练 / 康复 / 科研的启发",
+        ],
+    )
+    if value:
+        return _brief_text(value, 125)
+    if paper.get("relation_to_me"):
+        return _brief_text(paper.get("relation_to_me"), 125)
+    return _brief_text(paper.get("my_judgment") or "摘要中未提供。", 125)
 
 
 def _brief_text(value: Any, limit: int) -> str:

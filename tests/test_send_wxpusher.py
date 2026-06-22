@@ -35,6 +35,13 @@ class WxPusherTests(unittest.TestCase):
             "focus_topics": ["肌骨康复", "肥胖"],
             "direction_display": "肥胖异质性 / 公开数据库",
             "study_type_display": "公开数据库 / 人群队列",
+            "data_source_display": "摘要中未提供",
+            "journal_metrics": {
+                "display_name": "British Journal of Sports Medicine",
+                "jcr_quartile": "Q1",
+                "cas_zone": "一区",
+                "impact_factor_display": "未配置",
+            },
             "top_pick_reason": "它能快速说明一个交叉方向的证据版图和研究缺口。",
         }
         with patch.dict(os.environ, {"PUBLIC_DIGEST_BASE_URL": "https://example.com/digests"}, clear=False):
@@ -50,15 +57,19 @@ class WxPusherTests(unittest.TestCase):
         self.assertIn("今日概览", message["content"])
         self.assertIn("最终推荐：1 篇", message["content"])
         self.assertIn("【文章 1】", message["content"])
-        self.assertIn("【一句话结论】", message["content"])
-        self.assertIn("【证据强度提醒】", message["content"])
+        self.assertIn("【研究问题】", message["content"])
+        self.assertIn("【核心发现】", message["content"])
         self.assertIn("【为什么值得看】", message["content"])
-        self.assertIn("本篇方向：肥胖异质性 / 公开数据库", message["content"])
+        self.assertIn("【实践意义】", message["content"])
+        self.assertIn("【证据边界】", message["content"])
+        self.assertIn("期刊：British Journal of Sports Medicine｜JCR：Q1｜中科院：一区｜IF：未配置", message["content"])
+        self.assertIn("方向：肥胖异质性 / 公开数据库", message["content"])
         self.assertIn("研究类型：公开数据库 / 人群队列", message["content"])
-        self.assertIn("具体研究问题：这篇综述在梳理减重策略证据。", message["content"])
-        self.assertIn("关键结局：体重管理和骨关节炎相关结局。", message["content"])
-        self.assertIn("结果具体性：高：摘要提供了较具体的结果信息。", message["content"])
-        self.assertIn("【实践价值】", message["content"])
+        self.assertIn("数据/样本：摘要中未提供", message["content"])
+        self.assertIn("这篇综述在梳理减重策略证据。", message["content"])
+        self.assertIn("这篇范围综述认为，GLP-1 受体激动剂可能是辅助工具。", message["content"])
+        self.assertIn("把运动、营养和药物减重放在同一方案中思考。", message["content"])
+        self.assertIn("这是范围综述，只能说明研究现状和证据缺口", message["content"])
         self.assertIn("【阅读全文】", message["content"])
         self.assertIn("【历史简报】", message["content"])
         self.assertNotIn("## 今日推荐", message["content"])

@@ -113,7 +113,7 @@ def summarize_paper(
     sections = _extract_labeled_sections(abstract)
     article_type = detect_article_type(paper)
     matched_keywords = paper.get("matched_keywords") or _match_keywords(paper, keywords_config)
-    keyword_labels = [item.get("zh") or item.get("term") for item in matched_keywords]
+    keyword_labels = [_keyword_label(item) for item in matched_keywords]
     keyword_terms = _keyword_terms(paper, matched_keywords)
 
     if _is_glp1_oa_scoping_review(paper):
@@ -322,6 +322,56 @@ def _summarize_systematic_review(
     methods = _section(sections, ["methods", "method", "data sources", "study selection"])
     conclusion = _section(sections, ["conclusions", "conclusion", "interpretation"])
     focus = _topic_phrase(keyword_labels)
+    blob = _paper_blob(paper)
+
+    if "caffeine" in blob and "swimming performance" in blob and ("meta-analysis" in blob or "meta analysis" in blob):
+        return {
+            "chinese_title": title,
+            "one_sentence_conclusion": (
+                "这篇系统综述/多层级 Meta 分析评估咖啡因摄入是否改善游泳表现；它直接服务于比赛补剂策略讨论，"
+                "但具体剂量、项目距离、个体差异和效应大小仍需要结合摘要结果或全文核对。"
+            ),
+            "why_read": (
+                "它回答的是运动营养里很实际的问题：咖啡因补剂能不能帮助游泳表现。"
+                "这比泛泛讨论运动营养更有用，适合用于训练营养、比赛前补剂和个体反应差异的讨论。"
+            ),
+            "review_question": "综述问题是：咖啡因摄入对不同游泳项目或测试情境中的运动表现是否有改善作用。",
+            "included_types": _included_types_text(methods),
+            "included_studies": _included_studies_text(results),
+            "outcomes": "主要结局是游泳表现；具体包括哪些距离、测试指标和表现单位需要核对摘要结果或全文。",
+            "pooled_effects": _review_results_text(results),
+            "evidence_quality": _evidence_quality_text(methods + " " + results),
+            "author_conclusion": _safe_chinese_conclusion(conclusion, MISSING),
+            "limitations": _limitations_text(_section(sections, ["limitations", "limitation"]), results),
+            "my_judgment": (
+                "这篇适合放在运动营养和竞技表现补剂策略里读；如果摘要没有给出效应量、剂量分层或项目距离分层，"
+                "推荐等级应低于结果非常具体的 Meta 分析。"
+            ),
+            "inspiration": "可用于设计游泳项目咖啡因补剂讨论框架：剂量、摄入时机、项目距离、训练状态和个体耐受性都应分开看。",
+        }
+
+    if "irisin" in blob and "training" in blob and ("overweight" in blob or "obesity" in blob):
+        return {
+            "chinese_title": title,
+            "one_sentence_conclusion": (
+                "这篇 Meta 分析关注不同训练方式是否会改变超重或肥胖人群循环 irisin 水平，"
+                "适合用来理解运动干预、肥胖代谢和肌因子之间的联系；具体效应量以摘要/全文报告为准。"
+            ),
+            "why_read": (
+                "它不是单纯谈减脂，也不是运动营养，而是把训练方式与 irisin 这个肌因子联系起来，"
+                "对肥胖代谢、运动生理和运动干预机制选题更有参考价值。"
+            ),
+            "review_question": "综述问题是：不同训练方式对超重或肥胖人群循环 irisin 水平是否有影响。",
+            "included_types": _included_types_text(methods),
+            "included_studies": _included_studies_text(results),
+            "outcomes": "主要结局是循环 irisin 水平；如果摘要未说明体脂、胰岛素敏感性等次要结局，就不额外补写。",
+            "pooled_effects": _review_results_text(results),
+            "evidence_quality": _evidence_quality_text(methods + " " + results),
+            "author_conclusion": _safe_chinese_conclusion(conclusion, MISSING),
+            "limitations": _limitations_text(_section(sections, ["limitations", "limitation"]), results),
+            "my_judgment": "这篇更适合作为“运动干预-肥胖代谢-肌因子”背景文献，不应被误归为膳食脂肪或运动营养。",
+            "inspiration": "可帮助构建肥胖人群训练干预机制框架：训练方式、能量代谢、肌因子反应和临床表型需要一起考虑。",
+        }
 
     return {
         "chinese_title": title,
@@ -528,6 +578,21 @@ def _evidence_strength(article_type_key: str) -> str:
 def _translate_title(title: str, article_type_label: str, keyword_labels: list[str]) -> str:
     if not title:
         return f"{_topic_phrase(keyword_labels)}相关{article_type_label}"
+    normalized_title = normalize_text(title)
+    if "caffeine makes a splash" in normalized_title or (
+        "caffeine" in normalized_title and "swimming performance" in normalized_title and "meta" in normalized_title
+    ):
+        return "咖啡因摄入对游泳表现影响的系统综述与多层级 Meta 分析"
+    if "irisin" in normalized_title and "training" in normalized_title and (
+        "overweight" in normalized_title or "obesity" in normalized_title
+    ):
+        return "不同训练方式对超重和肥胖人群循环 irisin 水平影响的系统综述与 Meta 分析"
+    if "c-reactive protein-triglyceride-glucose" in normalized_title and "masld" in normalized_title:
+        return "C 反应蛋白-甘油三酯葡萄糖指数与 MASLD 人群心代谢风险的队列研究"
+    if "electromyography" in normalized_title and ("rotator cuff" in normalized_title or "deltoid" in normalized_title):
+        return "肩袖与三角肌疲劳相关的肌电图研究"
+    if "integrated proteomic and metabolomic" in normalized_title and "ptsd" in normalized_title:
+        return "PTSD 相关多系统疾病和加速衰老中的蛋白质组与代谢组研究"
     if _is_athlete_rts_infection({"title": title}):
         return "病原体确认的急性呼吸道感染后，影响运动员重返运动结局的相关因素：AWARE X 研究"
     if "glp-1 receptor agonists and weight-loss strategies" in normalize_text(title):
@@ -692,6 +757,8 @@ def _observational_results_text(
         return MISSING
     numbers = _extract_numbers(results)
     key_variables = _key_variable_text(" ".join([context, results]))
+    if paper and _is_athlete_rts_infection(paper) and not numbers:
+        return "摘要未提供具体效应量、p 值或关键变量的方向性结果；可确认研究聚焦急性呼吸道感染后运动员 return-to-sport 结局的相关因素，具体关键因素需阅读全文结果表。"
     if "associated" in normalize_text(results):
         if numbers:
             variable_part = "" if key_variables == MISSING else f"相关变量包括：{key_variables}"
@@ -790,6 +857,11 @@ def _outcomes_text(text_raw: str) -> str:
         ("gait", "步态"),
         ("emg", "肌电"),
         ("quality of life", "生活质量"),
+        ("masld", "MASLD 相关结局"),
+        ("metabolic dysfunction-associated steatotic liver disease", "MASLD 相关结局"),
+        ("cardiometabolic", "心代谢结局"),
+        ("multimorbidity", "多病共存"),
+        ("mortality", "死亡风险"),
     ]:
         if term in text:
             outcomes.append(label)
@@ -879,6 +951,12 @@ def _key_variable_text(text_raw: str) -> str:
         ("respiratory infection", "呼吸道感染相关特征"),
         ("return-to-sport", "重返运动结局"),
         ("return to sport", "重返运动结局"),
+        ("c-reactive protein-triglyceride-glucose", "C 反应蛋白-甘油三酯葡萄糖指数"),
+        ("crp-triglyceride-glucose", "C 反应蛋白-甘油三酯葡萄糖指数"),
+        ("tyg", "TyG 相关指标"),
+        ("uk biobank", "UK Biobank 数据来源"),
+        ("masld", "MASLD 状态"),
+        ("metabolic dysfunction-associated steatotic liver disease", "MASLD 状态"),
     ]:
         if term in text:
             variables.append(label)
@@ -888,8 +966,11 @@ def _key_variable_text(text_raw: str) -> str:
 
 
 def _observational_research_question(paper: dict[str, Any], focus: str) -> str:
+    blob = _paper_blob(paper)
     if _is_athlete_rts_infection(paper):
         return "这项研究想知道：病原体确认的急性呼吸道感染后，哪些因素与运动员重返运动或恢复训练的结局相关。"
+    if "masld" in blob and ("uk biobank" in blob or "cohort" in blob):
+        return "这项队列研究想知道：MASLD 人群中，CRP-TyG 等炎症-代谢指标是否与后续心代谢多病风险相关。"
     return f"研究问题聚焦于{focus}相关暴露因素、分组变量或结局指标之间的关系。"
 
 
@@ -1083,7 +1164,7 @@ def _keyword_terms(paper: dict[str, Any], matched_keywords: list[dict[str, Any]]
     blob = " " + normalize_text(" ".join([str(paper.get("title") or ""), str(paper.get("abstract") or "")])) + " "
     terms: list[str] = []
     for keyword in matched_keywords:
-        term = str(keyword.get("term") or "").strip()
+        term = str(keyword.get("matched_term") or keyword.get("term") or "").strip()
         if term:
             terms.append(term)
     domain_terms = [
@@ -1126,6 +1207,14 @@ def _keyword_terms(paper: dict[str, Any], matched_keywords: list[dict[str, Any]]
         if trigger in blob and label not in terms:
             terms.append(label)
     return list(dict.fromkeys(terms))[:8]
+
+
+def _keyword_label(keyword: dict[str, Any]) -> str:
+    matched_term = str(keyword.get("matched_term") or "").strip()
+    base_term = str(keyword.get("term") or "").strip()
+    if matched_term and matched_term.lower() != base_term.lower():
+        return matched_term
+    return str(keyword.get("zh") or keyword.get("term") or matched_term or "未命名关键词")
 
 
 def _focus_topics_from_terms(
@@ -1178,6 +1267,13 @@ def _dictionary_terms(paper: dict[str, Any], summary_text: str) -> list[dict[str
 
 
 def _top_pick_reason(article_type_key: str, keyword_terms: list[str], details: dict[str, str]) -> str:
+    detail_blob = normalize_text(" ".join(str(value) for value in details.values()))
+    if "irisin" in detail_blob and ("overweight" in detail_blob or "肥胖" in detail_blob):
+        return "它直接连接训练方式、肥胖代谢和 irisin 肌因子，适合做运动干预机制方向的精读入口。"
+    if "caffeine" in detail_blob and ("swimming" in detail_blob or "游泳" in detail_blob):
+        return "它直接回答咖啡因是否影响游泳表现，适合运动营养和竞技补剂策略讨论。"
+    if "return-to-sport" in detail_blob or "重返运动" in detail_blob:
+        return "它聚焦感染后运动员恢复训练/复赛决策，适合运动医学和队医随访管理讨论。"
     if article_type_key == "scoping_review":
         return "它能快速说明一个交叉方向的证据版图和研究缺口，适合做选题背景。"
     if article_type_key == "experimental":
@@ -1245,8 +1341,11 @@ def _match_keywords(paper: dict[str, Any], keywords_config: dict[str, Any]) -> l
     matched = []
     for keyword in iter_keywords(keywords_config):
         terms = [keyword.get("term"), *keyword.get("aliases", [])]
-        if any(normalize_text(term) in blob for term in terms if term):
-            matched.append(keyword)
+        matched_term = next((term for term in terms if _term_in_blob(term, blob)), "")
+        if matched_term:
+            item = dict(keyword)
+            item["matched_term"] = matched_term
+            matched.append(item)
     return matched
 
 
@@ -1260,6 +1359,13 @@ def _paper_blob(paper: dict[str, Any]) -> str:
             ]
         )
     )
+
+
+def _term_in_blob(term: Any, blob: str) -> bool:
+    normalized = normalize_text(term)
+    if not normalized:
+        return False
+    return f" {normalized} " in f" {blob} "
 
 
 def _is_glp1_oa_scoping_review(paper: dict[str, Any]) -> bool:

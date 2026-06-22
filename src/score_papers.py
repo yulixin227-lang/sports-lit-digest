@@ -77,7 +77,8 @@ def score_paper(
         + elite_radar_score
         - result_specificity_penalty
     )
-    paper["score"] = round(max(0, min(100, total)), 1)
+    capped_total = _apply_score_caps(total, result_specificity_score, classification)
+    paper["score"] = round(max(0, min(100, capped_total)), 1)
     paper["score_breakdown"] = {
         "journal": round(journal_score, 1),
         "article_type": round(article_type_score, 1),
@@ -89,6 +90,7 @@ def score_paper(
         "elite_radar": round(elite_radar_score, 1),
         "result_specificity": round(result_specificity_score, 1),
         "result_specificity_penalty": round(-result_specificity_penalty, 1),
+        "score_cap": round(capped_total - total, 1),
     }
     paper["result_specificity_score"] = round(result_specificity_score, 1)
     paper["reading_priority"] = _reading_priority(paper["score"], result_specificity_score)
@@ -118,6 +120,22 @@ def select_top_papers(
         ),
         reverse=True,
     )[:max_papers]
+
+
+def _apply_score_caps(total: float, result_specificity_score: float, classification: dict[str, Any]) -> float:
+    if result_specificity_score < 40:
+        return min(total, 59.0)
+    if result_specificity_score < 50:
+        return min(total, 69.0)
+    if (
+        classification.get("demote_reason")
+        and classification.get("has_category_config")
+        and not classification.get("relevance_gate_passed")
+    ):
+        return min(total, 59.0)
+    if classification.get("is_elite_journal") and not classification.get("is_elite_radar"):
+        return min(total, 59.0)
+    return total
 
 
 def _journal_score(
@@ -208,11 +226,13 @@ def _keyword_score(
 
     for keyword in iter_keywords(keywords_config):
         candidates = [keyword.get("term"), *keyword.get("aliases", [])]
-        if any(_term_in_blob(candidate, blob) for candidate in candidates if candidate):
+        matched_candidate = next((candidate for candidate in candidates if candidate and _term_in_blob(candidate, blob)), "")
+        if matched_candidate:
             weighted_count += float(keyword.get("weight", 1.0))
             matched.append(
                 {
                     "term": keyword.get("term"),
+                    "matched_term": matched_candidate,
                     "zh": keyword.get("zh") or keyword.get("term"),
                     "weight": keyword.get("weight", 1.0),
                 }
@@ -382,7 +402,7 @@ def _term_in_blob(term: Any, blob: str) -> bool:
     normalized = normalize_text(term)
     if not normalized:
         return False
-    return normalized in blob
+    return f" {normalized} " in f" {blob} "
 
 
 def _matches_any(values: list[Any], candidates: list[Any]) -> bool:

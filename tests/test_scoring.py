@@ -1,6 +1,7 @@
 import unittest
 
 from src.score_papers import score_paper
+from src.utils import ROOT, load_yaml_config
 
 
 JOURNALS = {
@@ -54,6 +55,12 @@ SCORING = {
     },
 }
 
+REAL_JOURNALS = load_yaml_config(ROOT / "config" / "journals.yaml")
+REAL_KEYWORDS = load_yaml_config(ROOT / "config" / "keywords.yaml")
+REAL_SCORING = load_yaml_config(ROOT / "config" / "scoring.yaml")
+REAL_CATEGORIES = load_yaml_config(ROOT / "config" / "categories.yaml")
+REAL_ELITE_JOURNALS = load_yaml_config(ROOT / "config" / "elite_journals.yaml")
+
 
 class ScoringTests(unittest.TestCase):
     def test_high_quality_trial_scores_above_threshold(self):
@@ -95,6 +102,46 @@ class ScoringTests(unittest.TestCase):
         self.assertLess(scored["result_specificity_score"], 50)
         self.assertLess(scored["score_breakdown"]["result_specificity_penalty"], 0)
         self.assertEqual(scored["reading_priority"], "可选阅读")
+
+    def test_low_information_article_cannot_receive_five_stars(self):
+        paper = {
+            "title": "Exercise physiology and training outcomes in adults",
+            "abstract": "BACKGROUND: This article discusses exercise physiology. CONCLUSIONS: Further research is needed.",
+            "journal": "British Journal of Sports Medicine",
+            "article_types": ["Journal Article"],
+        }
+        scored = score_paper(
+            paper,
+            REAL_JOURNALS,
+            REAL_KEYWORDS,
+            REAL_SCORING,
+            categories_config=REAL_CATEGORIES,
+            elite_journals_config=REAL_ELITE_JOURNALS,
+        )
+
+        self.assertLess(scored["result_specificity_score"], 50)
+        self.assertLessEqual(scored["score"], 69)
+        self.assertEqual(scored["reading_priority"], "可选阅读")
+
+    def test_weakly_related_ptsd_nature_communications_article_is_demoted(self):
+        paper = {
+            "title": "Integrated proteomic and metabolomic analyses implicate redox-metabolic pathways in PTSD-associated multisystem disease and accelerated aging.",
+            "abstract": "Proteomic and metabolomic profiles were analyzed in PTSD-associated multisystem disease and accelerated aging.",
+            "journal": "Nature Communications",
+            "article_types": ["Journal Article"],
+        }
+        scored = score_paper(
+            paper,
+            REAL_JOURNALS,
+            REAL_KEYWORDS,
+            REAL_SCORING,
+            categories_config=REAL_CATEGORIES,
+            elite_journals_config=REAL_ELITE_JOURNALS,
+        )
+
+        self.assertFalse(scored["classification"]["is_elite_radar"])
+        self.assertLess(scored["score"], 70)
+        self.assertLessEqual(scored["score_breakdown"]["score_cap"], 0)
 
 
 if __name__ == "__main__":

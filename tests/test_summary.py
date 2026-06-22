@@ -143,6 +143,42 @@ class SummaryTests(unittest.TestCase):
         self.assertNotIn("Changes在", summary["chinese_title"])
         self.assertNotIn("合并Meta", summary["chinese_title"])
 
+    def test_caffeine_swimming_meta_title_is_natural_chinese(self):
+        paper = {
+            "title": "Caffeine makes a splash: a systematic review and multilevel meta-analysis exploring the effects of caffeine intake on swimming performance.",
+            "abstract": "RESULTS: Swimming performance outcomes were synthesized. CONCLUSIONS: Caffeine intake may influence swimming performance.",
+            "journal": "Journal of the International Society of Sports Nutrition",
+            "article_types": ["Systematic Review", "Meta-Analysis"],
+            "matched_keywords": [{"term": "caffeine", "zh": "咖啡因"}],
+            "score": 72,
+            "result_specificity_score": 45,
+            "score_breakdown": {},
+        }
+        summary = summarize_paper(paper, {"keywords": []})
+
+        self.assertEqual(summary["chinese_title"], "咖啡因摄入对游泳表现影响的系统综述与多层级 Meta 分析")
+        self.assertNotIn("动物模型", summary["chinese_title"])
+        self.assertNotIn("运动营养、动物模型", summary["chinese_title"])
+        self.assertIn("游泳表现", summary["one_sentence_conclusion"])
+
+    def test_ptsd_omics_title_does_not_use_fake_keyword_title(self):
+        paper = {
+            "title": "Integrated proteomic and metabolomic analyses implicate redox-metabolic pathways in PTSD-associated multisystem disease and accelerated aging.",
+            "abstract": "Proteomic and metabolomic profiles were analyzed in PTSD-associated multisystem disease and accelerated aging.",
+            "journal": "Nature Communications",
+            "article_types": ["Journal Article"],
+            "matched_keywords": [{"term": "metabolomics", "zh": "代谢组学"}],
+            "score": 55,
+            "result_specificity_score": 35,
+            "score_breakdown": {},
+        }
+        summary = summarize_paper(paper, {"keywords": []})
+
+        self.assertEqual(summary["chinese_title"], "PTSD 相关多系统疾病和加速衰老中的蛋白质组与代谢组研究")
+        self.assertNotIn("运动营养", summary["chinese_title"])
+        self.assertNotIn("乳清蛋白", summary["chinese_title"])
+        self.assertNotIn("动物模型", summary["chinese_title"])
+
 
 def _section(summary, label):
     for section in summary["body_sections"]:
