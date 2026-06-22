@@ -77,6 +77,22 @@ class TopicClassificationTests(unittest.TestCase):
 
         self.assertIn("运动营养", result["directions"])
 
+    def test_aware_x_return_to_sport_infection_is_not_animal_model(self):
+        result = self.classify(
+            "Factors associated with return-to-sport outcomes following pathogen-confirmed acute respiratory infections in athletes: AWARE X study",
+            "This prospective observational athlete cohort examined factors associated with return-to-sport after acute respiratory infections.",
+            journal="British Journal of Sports Medicine",
+        )
+
+        self.assertIn("运动医学", result["directions"])
+        self.assertIn("运动员健康", result["directions"])
+        self.assertIn("呼吸道感染", result["directions"])
+        self.assertIn("重返运动", result["directions"])
+        self.assertIn("人群队列", result["study_type_tags"])
+        self.assertIn("观察性研究", result["study_type_tags"])
+        self.assertNotIn("动物实验", result["study_type_tags"])
+        self.assertNotIn("动物实验", result["data_sources"])
+
 
 if __name__ == "__main__":
     unittest.main()

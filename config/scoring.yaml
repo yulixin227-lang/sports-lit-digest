@@ -86,5 +86,11 @@
     "min_personal_relevance": 60,
     "journal_score": 28,
     "points": 6
+  },
+  "result_specificity": {
+    "low_threshold": 50,
+    "medium_threshold": 75,
+    "low_penalty": 12,
+    "medium_penalty": 5
   }
 }

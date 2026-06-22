@@ -82,6 +82,67 @@ class SummaryTests(unittest.TestCase):
         self.assertNotIn("GLP-1-RAs represent a promising adjunct", combined)
         self.assertNotIn("Evidence was heavily skewed", combined)
 
+    def test_aware_x_observational_summary_is_specific_and_chinese(self):
+        paper = {
+            "title": "Factors associated with return-to-sport outcomes following pathogen-confirmed acute respiratory infections in athletes: AWARE X study",
+            "abstract": (
+                "OBJECTIVE: To identify factors associated with return-to-sport outcomes following pathogen-confirmed acute respiratory infections in athletes. "
+                "METHODS: This prospective observational athlete cohort examined return-to-sport outcomes after acute respiratory infections. "
+                "RESULTS: Factors associated with return-to-sport outcomes were examined. "
+                "CONCLUSIONS: Clinical follow-up may support return-to-sport decisions."
+            ),
+            "journal": "British Journal of Sports Medicine",
+            "year": 2026,
+            "doi": "10.1000/awarex",
+            "article_types": ["Journal Article"],
+            "matched_keywords": [{"term": "sports medicine", "zh": "运动医学"}],
+            "score": 72,
+            "result_specificity_score": 30,
+            "score_breakdown": {},
+            "classification": {
+                "direction_display": "运动医学 / 运动员健康 / 呼吸道感染 / 重返运动",
+                "study_type_display": "人群队列 / 观察性研究",
+                "data_source_display": "运动员临床队列",
+                "elite_radar_display": "否",
+                "relation_to_me": "它命中运动员健康和重返运动方向。",
+            },
+        }
+        summary = summarize_paper(paper, {"keywords": []})
+
+        self.assertEqual(
+            summary["chinese_title"],
+            "病原体确认的急性呼吸道感染后，影响运动员重返运动结局的相关因素：AWARE X 研究",
+        )
+        self.assertNotIn("associated合并", summary["chinese_title"])
+        self.assertNotIn("在athletes", summary["chinese_title"])
+        self.assertIn("AWARE X", summary["one_sentence_conclusion"])
+        self.assertIn("运动员", summary["one_sentence_conclusion"])
+        self.assertIn("return-to-sport", summary["one_sentence_conclusion"])
+        self.assertNotEqual(summary["one_sentence_conclusion"], "作者认为研究变量之间存在关联，但摘要层面不能据此推断因果。")
+        self.assertIn("摘要未提供具体效应量", _section(summary, "主要关联结果"))
+        self.assertIn("恢复训练", summary["why_read"])
+        self.assertEqual(summary["reading_priority"], "可选阅读")
+
+    def test_chinglish_systematic_review_title_falls_back_to_chinese(self):
+        paper = {
+            "title": "A Systematic Review with Meta-analysis of the Association between Changes in Muscle Strength and Clinical Outcome Changes in Patellofemoral Pain",
+            "abstract": "RESULTS: Associations were evaluated. CONCLUSIONS: Strength changes may relate to clinical outcomes.",
+            "journal": "Sports Medicine",
+            "article_types": ["Systematic Review", "Meta-Analysis"],
+            "matched_keywords": [
+                {"term": "sports medicine", "zh": "运动医学"},
+                {"term": "resistance training", "zh": "抗阻训练"},
+            ],
+            "score": 80,
+            "score_breakdown": {},
+        }
+        summary = summarize_paper(paper, {"keywords": []})
+
+        self.assertTrue(summary["chinese_title"].startswith("关于"))
+        self.assertNotIn("of the Association", summary["chinese_title"])
+        self.assertNotIn("Changes在", summary["chinese_title"])
+        self.assertNotIn("合并Meta", summary["chinese_title"])
+
 
 def _section(summary, label):
     for section in summary["body_sections"]:

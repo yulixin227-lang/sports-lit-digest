@@ -22,9 +22,16 @@ class WxPusherTests(unittest.TestCase):
             "stars": "★★★★☆",
             "recommendation_index": "4.5/5",
             "score": 81,
+            "reading_priority": "优先阅读",
+            "result_specificity_display": "高：摘要提供了较具体的结果信息。",
             "one_sentence_conclusion": "这篇范围综述认为，GLP-1 受体激动剂可能是辅助工具。",
             "evidence_strength": "这是范围综述，只能说明研究现状和证据缺口，不能直接证明干预有效。",
-            "body_sections": [{"label": "为什么值得看", "value": "它把肥胖、骨关节炎和运动康复放在同一张证据地图里。"}],
+            "body_sections": [
+                {"label": "为什么值得看", "value": "它把肥胖、骨关节炎和运动康复放在同一张证据地图里。"},
+                {"label": "研究问题", "value": "这篇综述在梳理减重策略证据。"},
+                {"label": "结局指标", "value": "体重管理和骨关节炎相关结局。"},
+                {"label": "实践启发", "value": "把运动、营养和药物减重放在同一方案中思考。"},
+            ],
             "focus_topics": ["肌骨康复", "肥胖"],
             "direction_display": "肥胖异质性 / 公开数据库",
             "study_type_display": "公开数据库 / 人群队列",
@@ -48,6 +55,10 @@ class WxPusherTests(unittest.TestCase):
         self.assertIn("【为什么值得看】", message["content"])
         self.assertIn("本篇方向：肥胖异质性 / 公开数据库", message["content"])
         self.assertIn("研究类型：公开数据库 / 人群队列", message["content"])
+        self.assertIn("具体研究问题：这篇综述在梳理减重策略证据。", message["content"])
+        self.assertIn("关键结局：体重管理和骨关节炎相关结局。", message["content"])
+        self.assertIn("结果具体性：高：摘要提供了较具体的结果信息。", message["content"])
+        self.assertIn("【实践价值】", message["content"])
         self.assertIn("【阅读全文】", message["content"])
         self.assertIn("【历史简报】", message["content"])
         self.assertNotIn("## 今日推荐", message["content"])

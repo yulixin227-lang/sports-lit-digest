@@ -8,6 +8,20 @@ from .utils import normalize_text
 
 
 MISSING = "摘要中未提供"
+ANIMAL_MODEL_TERMS = [
+    "mouse",
+    "mice",
+    "rat",
+    "rats",
+    "murine",
+    "animal model",
+    "rodent",
+    "swine",
+    "rabbit",
+    "zebrafish",
+    "drosophila",
+    "c elegans",
+]
 
 
 def classify_paper(
@@ -33,7 +47,8 @@ def classify_paper(
         elite_match=elite_match,
     )
     is_elite_radar = bool(elite_match and personal_relevance_score >= 60)
-    directions = [category["zh"] for category in matched_categories]
+    directions = [*_special_directions(blob), *[category["zh"] for category in matched_categories]]
+    directions = list(dict.fromkeys(directions))
     if is_elite_radar and "顶刊雷达" not in directions:
         directions.append("顶刊雷达")
 
@@ -78,11 +93,13 @@ def _study_type_tags(blob: str) -> list[str]:
     tags: list[str] = []
     if any(_term_in_blob(term, blob) for term in ["uk biobank", "nhanes", "china kadoorie biobank", "biobank japan", "all of us"]):
         tags.append("公开数据库")
-    if any(_term_in_blob(term, blob) for term in ["cohort", "prospective cohort", "longitudinal cohort", "population study", "epidemiology"]):
+    if any(_term_in_blob(term, blob) for term in ["cohort", "prospective cohort", "longitudinal cohort", "population study", "epidemiology"]) or _is_athlete_rts_infection(blob):
         tags.append("人群队列")
+    if any(_term_in_blob(term, blob) for term in ["observational study", "observational", "prospective", "cross sectional", "cross-sectional", "case control", "case-control"]) or _is_athlete_rts_infection(blob):
+        tags.append("观察性研究")
     if any(_term_in_blob(term, blob) for term in ["randomized controlled trial", "randomised controlled trial", "clinical trial", "randomized trial", "controlled trial"]):
         tags.append("RCT")
-    if any(_term_in_blob(term, blob) for term in ["mouse", "mice", "rat", "animal model", "diet-induced obesity", "high-fat diet"]):
+    if _has_animal_model_signal(blob):
         tags.append("动物实验")
     if any(_term_in_blob(term, blob) for term in ["cell culture", "in vitro", "myotube", "c2c12"]):
         tags.append("细胞实验")
@@ -99,6 +116,8 @@ def _study_type_tags(blob: str) -> list[str]:
 
 def _data_sources(blob: str) -> list[str]:
     sources = []
+    if _is_athlete_rts_infection(blob):
+        sources.append("运动员临床队列")
     for term, label in [
         ("uk biobank", "UK Biobank"),
         ("nhanes", "NHANES"),
@@ -110,7 +129,15 @@ def _data_sources(blob: str) -> list[str]:
         ("mouse", "动物实验"),
         ("mice", "动物实验"),
         ("rat", "动物实验"),
+        ("rats", "动物实验"),
+        ("murine", "动物实验"),
         ("animal model", "动物实验"),
+        ("rodent", "动物实验"),
+        ("swine", "动物实验"),
+        ("rabbit", "动物实验"),
+        ("zebrafish", "动物实验"),
+        ("drosophila", "动物实验"),
+        ("c elegans", "动物实验"),
         ("cell culture", "细胞实验"),
         ("in vitro", "细胞实验"),
     ]:
@@ -163,7 +190,7 @@ def _personal_relevance_score(
     score = 0
     score += min(60, 20 * len(matched_categories))
     score += min(20, 5 * sum(len(category.get("terms") or []) for category in matched_categories))
-    if any(tag in study_type_tags for tag in ["公开数据库", "RCT", "人群队列", "多组学", "动物实验"]):
+    if any(tag in study_type_tags for tag in ["公开数据库", "RCT", "人群队列", "观察性研究", "多组学", "动物实验"]):
         score += 10
     if elite_match and elite_topic_score:
         score += min(20, 5 * elite_topic_score)
@@ -202,6 +229,26 @@ def _paper_blob(paper: dict[str, Any]) -> str:
     semantic = paper.get("semantic_scholar") or {}
     values.extend([semantic.get("venue"), semantic.get("journal")])
     return normalize_text(" ".join(str(value or "") for value in values))
+
+
+def _special_directions(blob: str) -> list[str]:
+    if _is_athlete_rts_infection(blob):
+        return ["运动医学", "运动员健康", "呼吸道感染", "重返运动"]
+    return []
+
+
+def _is_athlete_rts_infection(blob: str) -> bool:
+    has_athlete = any(_term_in_blob(term, blob) for term in ["athlete", "athletes"])
+    has_rts = any(_term_in_blob(term, blob) for term in ["return-to-sport", "return to sport", "return-to-play", "return to play"])
+    has_infection = any(
+        _term_in_blob(term, blob)
+        for term in ["acute respiratory infection", "acute respiratory infections", "respiratory infection", "respiratory infections", "pathogen-confirmed"]
+    )
+    return has_athlete and has_rts and has_infection
+
+
+def _has_animal_model_signal(blob: str) -> bool:
+    return any(_term_in_blob(term, blob) for term in ANIMAL_MODEL_TERMS)
 
 
 def _term_in_blob(term: Any, blob: str) -> bool:

@@ -63,6 +63,8 @@ def score_paper(
     relevance_boost = _personal_relevance_boost(classification, scoring_config)
     population_database_score = _population_database_boost(classification, scoring_config)
     elite_radar_score = _elite_radar_boost(classification, scoring_config)
+    result_specificity_score = _result_specificity_score(paper)
+    result_specificity_penalty = _result_specificity_penalty(result_specificity_score, scoring_config)
 
     total = (
         journal_score
@@ -73,6 +75,7 @@ def score_paper(
         + relevance_boost
         + population_database_score
         + elite_radar_score
+        - result_specificity_penalty
     )
     paper["score"] = round(max(0, min(100, total)), 1)
     paper["score_breakdown"] = {
@@ -84,7 +87,11 @@ def score_paper(
         "personal_relevance": round(relevance_boost, 1),
         "population_database": round(population_database_score, 1),
         "elite_radar": round(elite_radar_score, 1),
+        "result_specificity": round(result_specificity_score, 1),
+        "result_specificity_penalty": round(-result_specificity_penalty, 1),
     }
+    paper["result_specificity_score"] = round(result_specificity_score, 1)
+    paper["reading_priority"] = _reading_priority(paper["score"], result_specificity_score)
     paper["matched_keywords"] = matched_keywords
     paper["classification"] = classification
     paper["personal_relevance_score"] = classification.get("personal_relevance_score", 0)
@@ -269,6 +276,81 @@ def _readability_score(
         score += float(config.get("structured_abstract_points", 2))
 
     return max(0, min(max_score, score))
+
+
+def _result_specificity_score(paper: dict[str, Any]) -> float:
+    abstract = str(paper.get("abstract") or "")
+    results = _results_section(abstract)
+    target_text = results or abstract
+    if not target_text:
+        return 0.0
+
+    blob = normalize_text(target_text)
+    score = 20.0 if results else 10.0
+    if _extract_numbers(target_text):
+        score += 25
+    if re.search(r"\b(p\s*[<=>]\s*0?\.\d+|ci\b|confidence interval|odds ratio|hazard ratio|risk ratio|relative risk|effect size|cohen|beta)\b", target_text, re.IGNORECASE):
+        score += 25
+    if any(term in blob for term in ["associated", "increased", "decreased", "higher", "lower", "improved", "reduced", "predicted"]):
+        score += 15
+    if any(
+        term in blob
+        for term in [
+            "symptom duration",
+            "pathogen",
+            "training interruption",
+            "illness duration",
+            "severity",
+            "physical activity",
+            "return-to-sport",
+            "return to sport",
+            "vo2",
+            "strength",
+            "pain",
+        ]
+    ):
+        score += 10
+    if "conclusion" in blob and not results:
+        score += 5
+    return max(0.0, min(100.0, score))
+
+
+def _result_specificity_penalty(score: float, scoring_config: dict[str, Any]) -> float:
+    config = scoring_config.get("result_specificity", {})
+    low_threshold = float(config.get("low_threshold", 50))
+    medium_threshold = float(config.get("medium_threshold", 75))
+    if score < low_threshold:
+        return float(config.get("low_penalty", 12))
+    if score < medium_threshold:
+        return float(config.get("medium_penalty", 5))
+    return 0.0
+
+
+def _reading_priority(score: float, result_specificity_score: float) -> str:
+    if result_specificity_score < 50:
+        return "可选阅读"
+    if score >= 80:
+        return "优先阅读"
+    return "推荐阅读"
+
+
+def _results_section(abstract: str) -> str:
+    if not abstract:
+        return ""
+    match = re.search(r"(?is)\bRESULTS?\s*:\s*(.*?)(?:\bCONCLUSIONS?\s*:|\bCONCLUSION\s*:|\bINTERPRETATION\s*:|$)", abstract)
+    if match:
+        return match.group(1).strip()
+    return ""
+
+
+def _extract_numbers(text: str) -> list[str]:
+    if not text:
+        return []
+    return re.findall(
+        r"(?:\bn\s*=\s*\d+|\b\d+\s*/\s*\d+|\b\d+(?:\.\d+)?\s*%|\b\d+(?:,\d{3})*(?:\.\d+)?)",
+        text,
+        flags=re.IGNORECASE,
+    )
 
 
 def _paper_blob(paper: dict[str, Any]) -> str:

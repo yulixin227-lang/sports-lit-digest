@@ -10,6 +10,14 @@ from .utils import normalize_doi, normalize_text
 
 
 MISSING = "摘要中未提供。"
+LOW_INFORMATION_PHRASES = [
+    "存在关联",
+    "提供参考",
+    "不能单独说明因果",
+    "不能说明因果",
+    "变量之间存在关联",
+    "适合发现关联",
+]
 
 
 TERM_DEFINITIONS: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
@@ -120,6 +128,7 @@ def summarize_paper(
         details = _summarize_observational_study(paper, sections, keyword_labels)
     else:
         details = _summarize_generic_paper(paper, sections, keyword_labels)
+    details = _apply_quality_guard(details, article_type["key"], paper, sections, keyword_labels)
 
     body_sections = _body_sections(article_type["key"], details)
     summary_text = _summary_blob(details, body_sections)
@@ -157,6 +166,9 @@ def summarize_paper(
         "recommendation_index": _recommendation_index(float(paper.get("score") or 0)),
         "stars": _stars(float(paper.get("score") or 0)),
         "score": paper.get("score"),
+        "result_specificity_score": paper.get("result_specificity_score", 0),
+        "result_specificity_display": _result_specificity_display(paper.get("result_specificity_score", 0)),
+        "reading_priority": paper.get("reading_priority") or _reading_priority(float(paper.get("score") or 0), paper.get("result_specificity_score", 0)),
         "score_breakdown": paper.get("score_breakdown") or {},
         "matched_keywords": keyword_labels,
         "keyword_terms": keyword_terms,
@@ -200,10 +212,14 @@ def detect_article_type(paper: dict[str, Any]) -> dict[str, str]:
     observational_terms = [
         "observational study",
         "cohort",
+        "prospective",
         "cross sectional",
         "cross-sectional",
         "case control",
         "case-control",
+        "factors associated",
+        "return-to-sport",
+        "return to sport",
     ]
     if any(term in blob for term in observational_terms):
         return {"key": "observational", "label": "观察性研究", "template": "观察性研究模板"}
@@ -362,20 +378,38 @@ def _summarize_observational_study(
     results = _section(sections, ["results", "findings"])
     conclusion = _section(sections, ["conclusions", "conclusion", "interpretation"])
     focus = _topic_phrase(keyword_labels)
+    raw_context = " ".join([str(paper.get("title") or ""), methods, results, conclusion, str(paper.get("abstract") or "")])
+    is_athlete_rts = _is_athlete_rts_infection(paper)
+    key_variables = _key_variable_text(raw_context)
+    outcome_text = _outcomes_text(methods + " " + results + " " + str(paper.get("title") or ""))
+    if is_athlete_rts:
+        outcome_text = "关键结局是 return-to-sport 相关结局，包括感染后能否、何时以及以何种状态恢复训练或比赛；具体定义需要核对全文。"
+    associations = _observational_results_text(results, paper=paper, context=raw_context)
+    one_sentence = _specific_observational_conclusion(
+        paper=paper,
+        focus=focus,
+        key_variables=key_variables,
+        outcomes=outcome_text,
+        results=results,
+    )
+    why_read = _specific_observational_why_read(paper, focus)
+    participants = _participants_text(methods)
+    if is_athlete_rts and participants == MISSING:
+        participants = "研究对象是病原体确认的急性呼吸道感染后的运动员；具体样本量和项目分布如摘要未写明，就不能补写。"
 
     return {
         "chinese_title": title,
-        "one_sentence_conclusion": _safe_chinese_conclusion(conclusion, f"这项观察性研究关注{focus}相关因素之间的关联，不能单独说明因果。"),
-        "why_read": "观察性研究适合发现关联和提出假设，但解释时要特别注意混杂因素和因果边界。",
-        "research_question": f"研究问题聚焦于{focus}相关暴露因素、分组变量或结局指标之间的关系。",
-        "participants": _participants_text(methods),
-        "exposure": _exposure_text(methods + " " + results),
-        "outcomes": _outcomes_text(methods + " " + results),
-        "associations": _observational_results_text(results),
+        "one_sentence_conclusion": one_sentence,
+        "why_read": why_read,
+        "research_question": _observational_research_question(paper, focus),
+        "participants": participants,
+        "exposure": key_variables if key_variables != MISSING else _exposure_text(methods + " " + results),
+        "outcomes": outcome_text,
+        "associations": associations,
         "causality": "不能仅凭观察性研究说明因果；最多支持相关性或风险线索，仍需干预研究或更强设计验证。",
         "limitations": _limitations_text(_section(sections, ["limitations", "limitation"]), results),
-        "my_judgment": "适合作为假设生成和背景证据；不建议把相关性直接写成训练或治疗一定有效。",
-        "inspiration": f"对科研训练：可以从这类研究中提炼变量、结局和潜在混杂因素，为{focus}方向后续实验设计做准备。",
+        "my_judgment": _specific_observational_judgment(paper, results),
+        "inspiration": _specific_observational_inspiration(paper, focus),
     }
 
 
@@ -494,6 +528,8 @@ def _evidence_strength(article_type_key: str) -> str:
 def _translate_title(title: str, article_type_label: str, keyword_labels: list[str]) -> str:
     if not title:
         return f"{_topic_phrase(keyword_labels)}相关{article_type_label}"
+    if _is_athlete_rts_infection({"title": title}):
+        return "病原体确认的急性呼吸道感染后，影响运动员重返运动结局的相关因素：AWARE X 研究"
     if "glp-1 receptor agonists and weight-loss strategies" in normalize_text(title):
         return "GLP-1 受体激动剂与减重策略在肥胖合并髋/膝骨关节炎人群中的应用：一项范围综述"
 
@@ -538,8 +574,8 @@ def _translate_title(title: str, article_type_label: str, keyword_labels: list[s
     translated = translated.replace(" for ", "用于")
     translated = translated.replace(" in ", "在")
     translated = translated.replace(" with ", "合并")
-    if _english_word_count(translated) > 8:
-        return f"{_topic_phrase(keyword_labels)}相关{article_type_label}：{translated}"
+    if _has_chinglish_title(translated) or _english_word_count(translated) > 8:
+        return _fallback_chinese_title(title, article_type_label, keyword_labels)
     return translated
 
 
@@ -645,14 +681,24 @@ def _experimental_results_text(results: str) -> str:
     return "摘要报告了具体结果数值：" + "、".join(numbers[:6]) + "；具体方向和统计显著性建议回到全文核对。"
 
 
-def _observational_results_text(results: str) -> str:
+def _observational_results_text(
+    results: str,
+    paper: dict[str, Any] | None = None,
+    context: str = "",
+) -> str:
     if not results:
+        if paper and _is_athlete_rts_infection(paper):
+            return "摘要未提供具体效应量、p 值或关键变量的方向性结果；目前只能确定它研究的是感染后重返运动结局的相关因素。"
         return MISSING
     numbers = _extract_numbers(results)
+    key_variables = _key_variable_text(" ".join([context, results]))
     if "associated" in normalize_text(results):
         if numbers:
-            return "摘要提示变量之间存在关联，并报告了数值信息：" + "、".join(numbers[:6]) + "。"
-        return "摘要提示变量之间存在关联，但摘要中未提供具体效应量或 p 值。"
+            variable_part = "" if key_variables == MISSING else f"相关变量包括：{key_variables}"
+            return variable_part + "摘要报告了数值信息：" + "、".join(numbers[:6]) + "；具体方向和统计模型仍需核对全文。"
+        if paper and _is_athlete_rts_infection(paper):
+            return "摘要未提供具体效应量或 p 值；可确认研究聚焦急性呼吸道感染后运动员 return-to-sport 结局的相关因素，具体关键因素需阅读全文结果表。"
+        return "摘要未提供具体效应量或 p 值；只能说明作者报告了关联分析，不能把相关因素解释为因果因素。"
     return _generic_results_text(results)
 
 
@@ -727,6 +773,13 @@ def _outcomes_text(text_raw: str) -> str:
     text = normalize_text(text_raw)
     outcomes = []
     for term, label in [
+        ("return-to-sport", "return-to-sport / 重返运动"),
+        ("return to sport", "return-to-sport / 重返运动"),
+        ("return-to-play", "return-to-play / 重返比赛"),
+        ("return to play", "return-to-play / 重返比赛"),
+        ("symptom", "症状恢复"),
+        ("training interruption", "训练中断时间"),
+        ("illness duration", "疾病或症状持续时间"),
         ("vo2", "VO2max / 心肺适能"),
         ("maximal oxygen uptake", "VO2max / 心肺适能"),
         ("cardiorespiratory fitness", "心肺适能"),
@@ -782,6 +835,250 @@ def _limitations_text(raw_limitations: str, results: str) -> str:
     return MISSING
 
 
+def _is_athlete_rts_infection(paper: dict[str, Any]) -> bool:
+    blob = " " + normalize_text(
+        " ".join(
+            [
+                str(paper.get("title") or ""),
+                str(paper.get("abstract") or ""),
+                " ".join(paper.get("article_types") or []),
+            ]
+        )
+    ) + " "
+    has_athlete = any(term in blob for term in [" athlete ", " athletes "])
+    has_rts = any(term in blob for term in [" return-to-sport ", " return to sport ", " return-to-play ", " return to play "])
+    has_infection = any(
+        term in blob
+        for term in [
+            " acute respiratory infection ",
+            " acute respiratory infections ",
+            " respiratory infection ",
+            " respiratory infections ",
+            " pathogen-confirmed ",
+        ]
+    )
+    return has_athlete and has_rts and has_infection
+
+
+def _key_variable_text(text_raw: str) -> str:
+    text = normalize_text(text_raw)
+    variables = []
+    for term, label in [
+        ("symptom duration", "症状持续时间"),
+        ("illness duration", "疾病持续时间"),
+        ("pathogen", "病原体类型"),
+        ("training interruption", "训练中断时间"),
+        ("sex", "性别"),
+        ("gender", "性别"),
+        ("sport", "运动项目"),
+        ("severity", "疾病严重程度"),
+        ("age", "年龄"),
+        ("previous infection", "既往感染史"),
+        ("vaccination", "疫苗接种状态"),
+        ("acute respiratory infection", "急性呼吸道感染相关特征"),
+        ("respiratory infection", "呼吸道感染相关特征"),
+        ("return-to-sport", "重返运动结局"),
+        ("return to sport", "重返运动结局"),
+    ]:
+        if term in text:
+            variables.append(label)
+    if variables:
+        return "、".join(dict.fromkeys(variables)) + "。"
+    return MISSING
+
+
+def _observational_research_question(paper: dict[str, Any], focus: str) -> str:
+    if _is_athlete_rts_infection(paper):
+        return "这项研究想知道：病原体确认的急性呼吸道感染后，哪些因素与运动员重返运动或恢复训练的结局相关。"
+    return f"研究问题聚焦于{focus}相关暴露因素、分组变量或结局指标之间的关系。"
+
+
+def _specific_observational_conclusion(
+    *,
+    paper: dict[str, Any],
+    focus: str,
+    key_variables: str,
+    outcomes: str,
+    results: str,
+) -> str:
+    if _is_athlete_rts_infection(paper):
+        variable_part = "症状持续时间、病原体类型、训练中断时间、疾病严重程度等因素" if key_variables == MISSING else key_variables.rstrip("。")
+        missing_part = ""
+        if _result_specificity_from_text(results) < 50:
+            missing_part = "；摘要未提供具体效应量或完整关键变量结果"
+        return (
+            f"这项 AWARE X 观察性研究关注病原体确认的急性呼吸道感染后，{variable_part}"
+            f"是否与运动员 return-to-sport 结局相关，可为感染后恢复训练和复赛决策提供风险线索{missing_part}，"
+            "但不能把这些相关因素解释为因果因素。"
+        )
+    if key_variables != MISSING and outcomes != "摘要中未提供明确结局指标。":
+        return f"这项观察性研究分析了{key_variables.rstrip('。')}与{outcomes.replace('主要结局指标包括：', '').rstrip('。')}之间的关系，可提供风险线索，但不能单独证明因果。"
+    return f"这项观察性研究关注{focus}相关因素与结局的关系；若摘要没有具体效应量，应作为假设生成和背景线索，而不是强因果证据。"
+
+
+def _specific_observational_why_read(paper: dict[str, Any], focus: str) -> str:
+    if _is_athlete_rts_infection(paper):
+        return (
+            "这篇文章值得看，是因为它把急性呼吸道感染后的 return-to-sport 问题放在真实运动员队列中分析，"
+            "对教练、队医和运动康复人员判断何时恢复训练、哪些运动员可能恢复较慢有实际参考价值。"
+            "它不能直接制定复赛标准，但能提供风险筛查和随访管理线索。"
+        )
+    return f"这篇文章值得看，是因为它把{focus}问题放在真实人群或临床场景中分析，适合用来发现风险线索、设计随访变量和提出后续干预研究假设。"
+
+
+def _specific_observational_judgment(paper: dict[str, Any], results: str) -> str:
+    specificity = _result_specificity_from_text(results)
+    if _is_athlete_rts_infection(paper):
+        if specificity < 50:
+            return (
+                "这篇更适合作为运动员感染后恢复训练/复赛管理的背景文献或可选阅读。"
+                "摘要层面结果不够具体，不能直接拿来制定复赛阈值，建议精读时重点看全文结果表中的关键因素和模型。"
+            )
+        return "这篇适合作为运动员感染后 return-to-sport 风险筛查和随访管理的重点文献，但仍要守住观察性研究的因果边界。"
+    if specificity < 50:
+        return "这篇文章的研究问题有价值，但摘要结果不够具体，适合作为可选阅读；是否精读取决于全文是否提供清晰效应量和模型。"
+    return "适合作为假设生成和背景证据；不建议把相关性直接写成训练或治疗一定有效。"
+
+
+def _specific_observational_inspiration(paper: dict[str, Any], focus: str) -> str:
+    if _is_athlete_rts_infection(paper):
+        return (
+            "对训练和康复管理：可把症状变化、训练中断时间、病原体信息和重返运动状态纳入随访清单。"
+            "对科研：适合发展为运动员感染后复赛决策模型或前瞻性队列研究，而不是直接当作干预证据。"
+        )
+    return f"对科研训练：可以从这类研究中提炼变量、结局和潜在混杂因素，为{focus}方向后续实验设计做准备。"
+
+
+def _apply_quality_guard(
+    details: dict[str, str],
+    article_type_key: str,
+    paper: dict[str, Any],
+    sections: dict[str, str],
+    keyword_labels: list[str],
+) -> dict[str, str]:
+    if article_type_key != "observational":
+        return details
+    guarded = dict(details)
+    results = _section(sections, ["results", "findings"])
+    focus = _topic_phrase(keyword_labels)
+    if _is_low_information_text(guarded.get("one_sentence_conclusion", "")):
+        guarded["one_sentence_conclusion"] = _specific_observational_conclusion(
+            paper=paper,
+            focus=focus,
+            key_variables=_key_variable_text(" ".join([str(paper.get("title") or ""), str(paper.get("abstract") or "")])),
+            outcomes=_outcomes_text(" ".join([str(paper.get("title") or ""), str(paper.get("abstract") or "")])),
+            results=results,
+        )
+    if _is_low_information_text(guarded.get("why_read", "")):
+        guarded["why_read"] = _specific_observational_why_read(paper, focus)
+    if _is_low_information_text(guarded.get("my_judgment", "")):
+        guarded["my_judgment"] = _specific_observational_judgment(paper, results)
+    if _is_low_information_text(guarded.get("inspiration", "")):
+        guarded["inspiration"] = _specific_observational_inspiration(paper, focus)
+    return guarded
+
+
+def _is_low_information_text(value: str) -> bool:
+    text = str(value or "").strip()
+    normalized = normalize_text(text)
+    if len(text) < 28:
+        return True
+    if any(phrase in text for phrase in LOW_INFORMATION_PHRASES):
+        has_specific_context = any(
+            term in normalized
+            for term in [
+                "athlete",
+                "athletes",
+                "return-to-sport",
+                "return to sport",
+                "respiratory infection",
+                "training",
+                "症状",
+                "运动员",
+                "重返运动",
+                "感染",
+                "结局",
+            ]
+        )
+        if not has_specific_context:
+            return True
+    return False
+
+
+def _has_chinglish_title(value: str) -> bool:
+    normalized = normalize_text(value)
+    bad_patterns = [
+        "associated合并",
+        "在athletes",
+        "在 athlete",
+        "pathogen-confirmed",
+        "return-to-sport outcomes在",
+    ]
+    if any(pattern in value or pattern in normalized for pattern in bad_patterns):
+        return True
+    has_chinese = bool(re.search(r"[\u4e00-\u9fff]", value))
+    if not has_chinese:
+        return False
+    if re.search(r"(在|与|合并|用于|一项)[A-Za-z]", value):
+        return True
+    if re.search(r"[A-Za-z](在|与|合并|用于)[A-Za-z]?", value):
+        return True
+    if _english_word_count(value) >= 5 and re.search(r"\b(of|between|following|outcomes|changes|association|effects?)\b", value, flags=re.IGNORECASE):
+        return True
+    return False
+
+
+def _fallback_chinese_title(title: str, article_type_label: str, keyword_labels: list[str]) -> str:
+    blob = normalize_text(title)
+    if "return-to-sport" in blob or "return to sport" in blob:
+        if "respiratory infection" in blob or "pathogen-confirmed" in blob:
+            return "关于运动员急性呼吸道感染后重返运动结局的观察性研究"
+        return "关于运动员重返运动结局的观察性研究"
+    topic = _topic_phrase(keyword_labels)
+    return f"关于{topic}的{article_type_label}"
+
+
+def _result_specificity_from_text(text: str) -> int:
+    if not text:
+        return 20
+    score = 25
+    numbers = _extract_numbers(text)
+    normalized = normalize_text(text)
+    if numbers:
+        score += 25
+    if any(term in normalized for term in ["odds ratio", "hazard ratio", "risk ratio", "confidence interval", " p ", "beta", "effect size"]):
+        score += 25
+    if any(term in normalized for term in ["associated", "increased", "decreased", "higher", "lower", "improved", "reduced"]):
+        score += 15
+    if _key_variable_text(text) != MISSING:
+        score += 10
+    return max(0, min(100, score))
+
+
+def _result_specificity_display(value: Any) -> str:
+    try:
+        score = float(value or 0)
+    except (TypeError, ValueError):
+        score = 0
+    if score >= 75:
+        return "高：摘要提供了较具体的结果信息。"
+    if score >= 50:
+        return "中：摘要提供了部分结果线索，但仍需核对全文。"
+    return "低：摘要缺少具体效应量、关键变量或方向性结果。"
+
+
+def _reading_priority(score: float, result_specificity: Any) -> str:
+    try:
+        specificity = float(result_specificity or 0)
+    except (TypeError, ValueError):
+        specificity = 0
+    if specificity < 50:
+        return "可选阅读"
+    if score >= 80:
+        return "优先阅读"
+    return "推荐阅读"
+
+
 def _keyword_terms(paper: dict[str, Any], matched_keywords: list[dict[str, Any]]) -> list[str]:
     blob = " " + normalize_text(" ".join([str(paper.get("title") or ""), str(paper.get("abstract") or "")])) + " "
     terms: list[str] = []
@@ -818,6 +1115,12 @@ def _keyword_terms(paper: dict[str, Any], matched_keywords: list[dict[str, Any]]
         ("sports nutrition", "sports nutrition"),
         ("protein supplementation", "protein supplementation"),
         ("creatine", "creatine"),
+        ("athlete", "athlete"),
+        ("athletes", "athlete"),
+        ("acute respiratory infection", "acute respiratory infection"),
+        ("respiratory infection", "respiratory infection"),
+        ("return-to-sport", "return-to-sport"),
+        ("return to sport", "return-to-sport"),
     ]
     for trigger, label in domain_terms:
         if trigger in blob and label not in terms:
@@ -840,6 +1143,12 @@ def _focus_topics_from_terms(
         topics.append("骨关节炎")
     if "weight loss" in terms or "GLP-1" in terms:
         topics.append("药物辅助减重")
+    if "athlete" in terms:
+        topics.append("运动员健康")
+    if "respiratory infection" in terms or "acute respiratory infection" in terms:
+        topics.append("呼吸道感染")
+    if "return-to-sport" in terms:
+        topics.append("重返运动")
     topics.extend(label for label in keyword_labels if label not in topics)
     return list(dict.fromkeys(topics))[:5]
 

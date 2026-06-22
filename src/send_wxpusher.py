@@ -460,6 +460,10 @@ def build_wechat_message(
                     f"文章类型：{paper.get('article_type_label', '类型待补全')}",
                     f"推荐指数：{paper.get('stars') or paper.get('recommendation_index', '待评估')}",
                     f"质量评分：{paper.get('score', '待评估')}/100",
+                    f"阅读优先级：{paper.get('reading_priority') or '推荐阅读'}",
+                    f"结果具体性：{paper.get('result_specificity_display') or '未评估'}",
+                    f"具体研究问题：{_brief_text(_paper_section(paper, '研究问题') or '摘要中未提供。', 90)}",
+                    f"关键结局：{_brief_text(_paper_section(paper, '结局指标') or _paper_section(paper, '测试指标') or '摘要中未提供。', 90)}",
                     "",
                     "【一句话结论】",
                     str(paper.get("one_sentence_conclusion") or "摘要中未提供。"),
@@ -469,6 +473,9 @@ def build_wechat_message(
                     "",
                     "【为什么值得看】",
                     _brief_text(_paper_section(paper, "为什么值得看") or paper.get("top_pick_reason") or "摘要中未提供。", 110),
+                    "",
+                    "【实践价值】",
+                    _brief_text(_paper_section(paper, "实践启发") or _paper_section(paper, "对我的启发") or paper.get("my_judgment") or "摘要中未提供。", 110),
                     "",
                 ]
             )

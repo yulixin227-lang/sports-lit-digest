@@ -46,6 +46,12 @@ SCORING = {
         "doi_points": 2,
         "structured_abstract_points": 2,
     },
+    "result_specificity": {
+        "low_threshold": 50,
+        "medium_threshold": 75,
+        "low_penalty": 12,
+        "medium_penalty": 5,
+    },
 }
 
 
@@ -71,6 +77,24 @@ class ScoringTests(unittest.TestCase):
         }
         scored = score_paper(paper, JOURNALS, KEYWORDS, SCORING)
         self.assertLess(scored["score_breakdown"]["article_type"], 8)
+
+    def test_low_result_specificity_is_downgraded_to_optional_reading(self):
+        paper = {
+            "title": "Factors associated with return-to-sport outcomes following pathogen-confirmed acute respiratory infections in athletes: AWARE X study",
+            "abstract": (
+                "OBJECTIVE: To identify factors associated with return-to-sport outcomes after acute respiratory infections in athletes. "
+                "METHODS: This prospective observational cohort examined athlete follow-up. "
+                "CONCLUSIONS: Follow-up may support return-to-sport decisions."
+            ),
+            "journal": "British Journal of Sports Medicine",
+            "doi": "10.1000/awarex",
+            "article_types": ["Journal Article"],
+        }
+        scored = score_paper(paper, JOURNALS, KEYWORDS, SCORING)
+
+        self.assertLess(scored["result_specificity_score"], 50)
+        self.assertLess(scored["score_breakdown"]["result_specificity_penalty"], 0)
+        self.assertEqual(scored["reading_priority"], "可选阅读")
 
 
 if __name__ == "__main__":
