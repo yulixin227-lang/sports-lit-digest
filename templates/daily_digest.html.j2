@@ -101,6 +101,21 @@
   {% for paper in papers %}
   <article class="paper-card">
     <h2>{{ loop.index }}. {{ paper.chinese_title }}</h2>
+    <section class="presentation-block">
+      <h3>基础信息</h3>
+      <ul>
+        <li>英文题目：{{ paper.title }}</li>
+        <li>中文题目：{{ paper.chinese_title }}</li>
+        <li>关键词：{{ paper.keywords_display }}</li>
+        <li>精简版摘要：{{ paper.brief_summary }}</li>
+        <li>期刊名称：{{ paper.journal_metrics.display_name }}</li>
+        <li>中科院分区：{{ paper.journal_metrics.cas_display }}</li>
+        <li>JCR 分区：{{ paper.journal_metrics.jcr_display }}</li>
+        <li>DOI：{{ paper.doi }}</li>
+        <li>PMID：{{ paper.pmid }}</li>
+        <li>研究类型：{{ paper.study_type_display }}</li>
+      </ul>
+    </section>
     <p class="meta"><strong>英文原题：</strong>{{ paper.title }}</p>
     <p class="meta"><strong>中文题目：</strong>{{ paper.chinese_title }}</p>
     <p class="meta"><strong>关键词：</strong>{{ paper.keywords_display }}</p>
@@ -135,6 +150,36 @@
     {% endfor %}
 
     {% set materials = paper.presentation_materials %}
+    {% set ready = paper.ppt_ready_fields %}
+    {% if ready %}
+    <section class="presentation-block">
+      <h3>组会汇报 / PPT 准备信息</h3>
+      <ul>
+        <li>作者为什么开展这个研究？{{ ready.why_study }}</li>
+        <li>创新点是什么？{{ ready.innovation }}</li>
+        <li>关键实验和数据：{{ ready.key_experiments_data }}</li>
+        <li>样本量：{{ ready.sample_size }}</li>
+        <li>肌肉取材方法：{{ ready.muscle_sampling }}</li>
+        <li>测了哪些组学：{{ ready.omics_measured }}</li>
+        <li>是否适合做组会汇报？{{ ready.suitability }}</li>
+        <li>PPT 可讲图建议：{{ ready.figure_advice }}</li>
+        <li>需要阅读全文确认：{{ ready.needs_confirmation }}</li>
+      </ul>
+      <h4>重要结论</h4>
+      <ul>
+        {% for item in ready.important_conclusions %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+      <h4>对小同行的启发</h4>
+      <ul>
+        {% for item in ready.peer_inspiration %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
     {% if materials %}
     <section class="presentation-block">
       <h3>组会汇报素材</h3>
@@ -223,6 +268,12 @@
     {% else %}
     <p>今天入选文章没有触发需要额外解释的英文缩写或术语。</p>
     {% endif %}
+  </section>
+
+  <section class="dict">
+    <h2>如何生成组会 PPT</h2>
+    <p>如果要生成带原文 Figure 的组会 PPT，需要把全文 PDF 放入 <code>paper_to_ppt/input_papers/</code>，然后手动运行 <code>python -m paper_to_ppt.main --input paper_to_ppt/input_papers --output paper_to_ppt/output/group_meeting.pptx</code>。</p>
+    <p>每日简报只提供文章筛选、摘要和 PPT 讲解思路；真正的原图 PPT 需要全文 PDF 支持。当前每日简报未读取全文 PDF，不会声称已经使用原文 Figure。</p>
   </section>
 
   <p class="meta">生成时间：{{ generated_at }}</p>

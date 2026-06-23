@@ -51,6 +51,9 @@ class WxPusherTests(unittest.TestCase):
                 "priority": "高",
                 "core_talking_point": "适合讲肥胖、骨关节炎和多模式康复管理的证据地图。",
             },
+            "ppt_ready_fields": {
+                "needs_confirmation": "需阅读全文确认：全文 PDF、原文 Figure、具体效应量。若要做 PPT，必须使用原文 Figure，不可编造图片。",
+            },
         }
         with patch.dict(os.environ, {"PUBLIC_DIGEST_BASE_URL": "https://example.com/digests"}, clear=False):
             message = build_wechat_message(
@@ -72,10 +75,11 @@ class WxPusherTests(unittest.TestCase):
         self.assertIn("【证据边界】", message["content"])
         self.assertIn("【组会价值】", message["content"])
         self.assertIn("适合｜优先级：高｜评分：76/100", message["content"])
-        self.assertIn("【适合讲什么】", message["content"])
+        self.assertIn("【可讲点】", message["content"])
         self.assertIn("适合讲肥胖、骨关节炎和多模式康复管理的证据地图", message["content"])
-        self.assertIn("【PPT 提醒】", message["content"])
-        self.assertIn("需下载全文 PDF，使用原文 Figure，不可编造图片", message["content"])
+        self.assertIn("【需确认】", message["content"])
+        self.assertIn("需阅读全文确认：全文 PDF、原文 Figure、具体效应量", message["content"])
+        self.assertIn("不可编造图片", message["content"])
         self.assertIn("期刊：British Journal of Sports Medicine｜JCR：Q1｜中科院：一区｜IF：未配置", message["content"])
         self.assertIn("方向：肥胖异质性 / 公开数据库", message["content"])
         self.assertIn("研究类型：公开数据库 / 人群队列", message["content"])

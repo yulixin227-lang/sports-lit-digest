@@ -17,3 +17,5 @@
 15. 微信、WxPusher、Server酱等推送凭据必须只从 `.env` 或 GitHub Secrets 读取，不能写死进代码、README 示例值或输出文件。
 16. dry-run 模式下不得真实发送微信推送。
 17. WxPusher SPT URL 与 APP_TOKEN 一样属于敏感凭据，不得在日志中完整打印；dry-run 只能显示脱敏 SPT。
+18. 每日简报默认只读取摘要和元数据；未读取全文 PDF 时，不得编造 Fig 1/Fig 2/Figure 内容，只能提示后续需要人工核对原文 Figure。
+19. `paper_to_ppt` 只能使用原文 PDF 或原文附件中的 Figure；无法稳定提取时必须写入缺失信息报告，不得生成替代实验图。

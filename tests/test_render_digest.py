@@ -96,12 +96,16 @@ class RenderDigestTests(unittest.TestCase):
 
         self.assertIn("今日最适合组会讲：第 2 篇", md_text)
         self.assertIn("组会汇报素材", html_text)
+        self.assertIn("组会汇报 / PPT 准备信息", html_text)
         self.assertIn("PPT 生成准备信息", html_text)
+        self.assertIn("基础信息", html_text)
         self.assertIn("需要人工核对", html_text)
         self.assertIn("当前未读取全文 PDF，Figure 内容需人工核对原文。", html_text)
-        self.assertIn("需阅读全文并提取原文 Figure 后确定", html_text)
+        self.assertIn("PPT 可讲图建议", html_text)
+        self.assertIn("当前每日简报未读取全文 PDF，无法确认原文 Figure", html_text)
         self.assertNotIn("Fig 1 显示", html_text)
         self.assertNotIn("Fig 2 展示", html_text)
+        self.assertNotIn("Fig 1：", html_text)
         self.assertIn("样本量", html_text)
         self.assertIn("组学类型", html_text)
         self.assertIn("摘要未明确说明，需阅读全文确认。", html_text)
@@ -172,6 +176,20 @@ def _presentation_test_paper(
             "important_conclusions": ["HIIT 可能改善肥胖成年人 VO2max，但具体效应量需阅读全文确认。"],
             "peer_inspiration": ["学习它如何把人群、干预和主要结局串成清晰 PICO。"],
         },
+        "ppt_ready_fields": {
+            "why_study": "作者关注肥胖人群心肺适能不足的问题。",
+            "innovation": "将研究设计、主要结局和实践意义串联起来，适合用于组会讲解。",
+            "key_experiments_data": "摘要未明确说明，需阅读全文确认。",
+            "sample_size": "摘要未明确说明，需阅读全文确认。",
+            "muscle_sampling": "摘要未明确说明，需阅读全文确认。",
+            "omics_measured": "摘要未明确说明，需阅读全文确认。",
+            "important_conclusions": ["HIIT 可能改善肥胖成年人 VO2max，但具体效应量需阅读全文确认。"],
+            "peer_inspiration": ["学习它如何把人群、干预和主要结局串成清晰 PICO。"],
+            "suitability": suitability,
+            "talking_point": "适合讲 HIIT 如何作为肥胖代谢和心肺适能研究的干预范式。",
+            "figure_advice": "当前每日简报未读取全文 PDF，无法确认原文 Figure。若要生成组会 PPT，请下载全文 PDF 后重点查看：研究设计流程图、主要结果图。",
+            "needs_confirmation": "需阅读全文确认：全文 PDF、原文 Figure、样本量、组学类型、具体效应量。",
+        },
         "ppt_preparation": {
             "short_pages": "3-5 页",
             "deep_pages": "8-12 页",
@@ -181,7 +199,7 @@ def _presentation_test_paper(
                 {
                     "title": "第 4 页起：关键 Figure 讲解页",
                     "bullets": [
-                        "Fig 1：需阅读全文并提取原文 Figure 后确定。",
+                        "当前每日简报未读取全文 PDF，无法确认原文 Figure。",
                         "建议优先查看的 Figure 类型：研究设计流程图、主要结果图。",
                     ],
                 },

@@ -494,11 +494,11 @@ def build_wechat_message(
                     "【组会价值】",
                     presentation["value"],
                     "",
-                    "【适合讲什么】",
+                    "【可讲点】",
                     presentation["talking_point"],
                     "",
-                    "【PPT 提醒】",
-                    "若要做 PPT，需下载全文 PDF，使用原文 Figure，不可编造图片。",
+                    "【需确认】",
+                    presentation["needs_confirmation"],
                     "",
                 ]
             )
@@ -745,6 +745,7 @@ def _presentation_pick_text(papers: list[dict[str, Any]]) -> str:
 
 def _paper_presentation_summary(paper: dict[str, Any]) -> dict[str, str]:
     materials = paper.get("presentation_materials") or {}
+    ready = paper.get("ppt_ready_fields") or {}
     score = materials.get("score") or paper.get("presentation_value_score") or "未评分"
     suitability = materials.get("suitability") or "可选"
     priority = materials.get("priority") or "中"
@@ -757,6 +758,11 @@ def _paper_presentation_summary(paper: dict[str, Any]) -> dict[str, str]:
     return {
         "value": f"{suitability}｜优先级：{priority}｜评分：{score}/100",
         "talking_point": _brief_text(talking_point, 170),
+        "needs_confirmation": _brief_text(
+            ready.get("needs_confirmation")
+            or "Figure、样本量、组学、肌肉取材方法和主要图表需阅读全文确认；若要做 PPT，必须使用原文 Figure，不可编造图片。",
+            190,
+        ),
     }
 
 

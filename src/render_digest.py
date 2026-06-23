@@ -295,6 +295,19 @@ def _paper_markdown(index: int, paper: dict[str, Any]) -> list[str]:
     lines = [
         f"## {index}. {paper['chinese_title']}",
         "",
+        "### 基础信息",
+        "",
+        f"- 英文题目：{paper['title']}",
+        f"- 中文题目：{paper['chinese_title']}",
+        f"- 关键词：{paper['keywords_display']}",
+        f"- 精简版摘要：{_paper_value(paper, 'brief_summary', '摘要未明确说明，需阅读全文确认。')}",
+        f"- 期刊名称：{paper['journal']}",
+        f"- 中科院分区：{_journal_metric(paper, 'cas_display')}",
+        f"- JCR 分区：{_journal_metric(paper, 'jcr_display')}",
+        f"- DOI：{paper['doi']}",
+        f"- PMID：{paper['pmid']}",
+        f"- 研究类型：{_paper_value(paper, 'study_type_display', '未明确研究类型')}",
+        "",
         f"**英文原题**：{paper['title']}",
         "",
         f"**期刊 / 年份 / DOI / PMID**：{paper['journal']} / {paper['year']} / {paper['doi']} / {paper['pmid']}",
@@ -338,6 +351,7 @@ def _paper_markdown(index: int, paper: dict[str, Any]) -> list[str]:
     ]
     for section in paper.get("body_sections") or []:
         lines.extend([f"**{section['label']}**", section["value"], ""])
+    lines.extend(_ppt_ready_markdown(paper))
     lines.extend(_presentation_markdown(paper))
     lines.extend(_ppt_markdown(paper))
     lines.extend(_missing_markdown(paper))
@@ -412,6 +426,18 @@ def _paper_html(index: int, paper: dict[str, Any]) -> list[str]:
     body = [
         "<article class='paper-card'>",
         f"<h2>{index}. {html.escape(str(paper['chinese_title']))}</h2>",
+        "<section class='presentation-block'><h3>基础信息</h3><ul>",
+        f"<li>英文题目：{html.escape(str(paper['title']))}</li>",
+        f"<li>中文题目：{html.escape(str(paper['chinese_title']))}</li>",
+        f"<li>关键词：{html.escape(str(paper['keywords_display']))}</li>",
+        f"<li>精简版摘要：{html.escape(_paper_value(paper, 'brief_summary', '摘要未明确说明，需阅读全文确认。'))}</li>",
+        f"<li>期刊名称：{html.escape(str(paper['journal']))}</li>",
+        f"<li>中科院分区：{html.escape(_journal_metric(paper, 'cas_display'))}</li>",
+        f"<li>JCR 分区：{html.escape(_journal_metric(paper, 'jcr_display'))}</li>",
+        f"<li>DOI：{html.escape(str(paper['doi']))}</li>",
+        f"<li>PMID：{html.escape(str(paper['pmid']))}</li>",
+        f"<li>研究类型：{html.escape(_paper_value(paper, 'study_type_display', '未明确研究类型'))}</li>",
+        "</ul></section>",
         f"<p class='meta'><strong>英文原题：</strong>{html.escape(str(paper['title']))}</p>",
         f"<p class='meta'><strong>期刊 / 年份 / DOI / PMID：</strong>{html.escape(str(paper['journal']))} / {html.escape(str(paper['year']))} / {html.escape(str(paper['doi']))} / {html.escape(str(paper['pmid']))}</p>",
         "<section class='journal-metrics'><strong>期刊信息</strong><ul>",
@@ -438,11 +464,39 @@ def _paper_html(index: int, paper: dict[str, Any]) -> list[str]:
     ]
     for section in paper.get("body_sections") or []:
         body.append(_html_field(section["label"], section["value"]))
+    body.extend(_ppt_ready_html(paper))
     body.extend(_presentation_html(paper))
     body.extend(_ppt_html(paper))
     body.extend(_missing_html(paper))
     body.append("</article>")
     return body
+
+
+def _ppt_ready_markdown(paper: dict[str, Any]) -> list[str]:
+    ready = paper.get("ppt_ready_fields") or {}
+    if not ready:
+        return []
+    lines = [
+        "### 组会汇报 / PPT 准备信息",
+        "",
+        f"- 作者为什么开展这个研究？{_dict_value(ready, 'why_study', '摘要未明确说明，需阅读全文确认。')}",
+        f"- 创新点是什么？{_dict_value(ready, 'innovation', '摘要未明确说明，需阅读全文确认。')}",
+        f"- 关键实验和数据：{_dict_value(ready, 'key_experiments_data', '摘要未明确说明，需阅读全文确认。')}",
+        f"- 样本量：{_dict_value(ready, 'sample_size', '摘要未明确说明，需阅读全文确认。')}",
+        f"- 肌肉取材方法：{_dict_value(ready, 'muscle_sampling', '摘要未明确说明，需阅读全文确认。')}",
+        f"- 测了哪些组学：{_dict_value(ready, 'omics_measured', '摘要未明确说明，需阅读全文确认。')}",
+        f"- 是否适合做组会汇报？{_dict_value(ready, 'suitability', '可选')}",
+        f"- PPT 可讲图建议：{_dict_value(ready, 'figure_advice', '当前每日简报未读取全文 PDF，无法确认原文 Figure。')}",
+        f"- 需要阅读全文确认：{_dict_value(ready, 'needs_confirmation', '需阅读全文确认：全文 PDF、原文 Figure。')}",
+        "",
+        "**重要结论**",
+        "",
+    ]
+    lines.extend(_markdown_list(ready.get("important_conclusions")))
+    lines.extend(["", "**对小同行的启发**", ""])
+    lines.extend(_markdown_list(ready.get("peer_inspiration")))
+    lines.append("")
+    return lines
 
 
 def _presentation_markdown(paper: dict[str, Any]) -> list[str]:
@@ -504,6 +558,33 @@ def _missing_markdown(paper: dict[str, Any]) -> list[str]:
         lines.append("- 当前摘要和元数据已覆盖主要核对项，但正式组会前仍建议阅读全文。")
     lines.append("")
     return lines
+
+
+def _ppt_ready_html(paper: dict[str, Any]) -> list[str]:
+    ready = paper.get("ppt_ready_fields") or {}
+    if not ready:
+        return []
+    body = [
+        "<section class='presentation-block'>",
+        "<h3>组会汇报 / PPT 准备信息</h3>",
+        "<ul>",
+        f"<li>作者为什么开展这个研究？{html.escape(_dict_value(ready, 'why_study', '摘要未明确说明，需阅读全文确认。'))}</li>",
+        f"<li>创新点是什么？{html.escape(_dict_value(ready, 'innovation', '摘要未明确说明，需阅读全文确认。'))}</li>",
+        f"<li>关键实验和数据：{html.escape(_dict_value(ready, 'key_experiments_data', '摘要未明确说明，需阅读全文确认。'))}</li>",
+        f"<li>样本量：{html.escape(_dict_value(ready, 'sample_size', '摘要未明确说明，需阅读全文确认。'))}</li>",
+        f"<li>肌肉取材方法：{html.escape(_dict_value(ready, 'muscle_sampling', '摘要未明确说明，需阅读全文确认。'))}</li>",
+        f"<li>测了哪些组学：{html.escape(_dict_value(ready, 'omics_measured', '摘要未明确说明，需阅读全文确认。'))}</li>",
+        f"<li>是否适合做组会汇报？{html.escape(_dict_value(ready, 'suitability', '可选'))}</li>",
+        f"<li>PPT 可讲图建议：{html.escape(_dict_value(ready, 'figure_advice', '当前每日简报未读取全文 PDF，无法确认原文 Figure。'))}</li>",
+        f"<li>需要阅读全文确认：{html.escape(_dict_value(ready, 'needs_confirmation', '需阅读全文确认：全文 PDF、原文 Figure。'))}</li>",
+        "</ul>",
+        "<h4>重要结论</h4>",
+        _html_list(ready.get("important_conclusions")),
+        "<h4>对小同行的启发</h4>",
+        _html_list(ready.get("peer_inspiration")),
+        "</section>",
+    ]
+    return body
 
 
 def _presentation_html(paper: dict[str, Any]) -> list[str]:

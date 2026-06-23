@@ -252,6 +252,18 @@ python -m src.main --days-back 3 --send-wechat --wechat-mode short
 
 如果标准发送和 SPT 都没有配置，程序会跳过推送并输出 warning，不会让 digest 生成失败。推送失败也不会影响 Markdown/HTML 简报生成。
 
+### 6. WxPusher 微信 ClawBot 收不到消息怎么办
+
+如果 WxPusher App 的消息列表里能看到推送，说明 Topic 或 UID 推送已经成功，通常不是 GitHub Actions 或代码失败。
+
+如果微信 ClawBot 聊天里没有收到，常见原因是微信 Link / ClawBot 通道未激活或已过期。处理方式：
+
+1. 在微信 ClawBot 聊天框里回复任意内容，重新激活当前通道 24 小时。
+2. 如果回复后仍不行，打开 WxPusher App：`我的 -> 推送渠道 -> 微信 ClawBot -> 重新绑定 / 重新启用`。
+3. 再手动运行一次 GitHub Actions 或本地发送命令测试。
+4. 如果 WxPusher App 有消息但 ClawBot 没消息，优先按通道激活问题排查，不要先怀疑代码。
+5. 如果希望长期稳定提醒，可以同时开启 WxPusher App 通知，把它作为微信 ClawBot 的备用通知方式。
+
 ## 修改期刊白名单
 
 编辑 `config/journals.yaml`。每个期刊可配置：
@@ -368,6 +380,34 @@ outputs/YYYY-MM-DD-digest.html
 ```
 
 `data/seen_papers.json` 会记录已经正式推送过的 DOI 或 PMID，避免重复推送。即使每天使用 `--days-back 3`，已经入选并在非 dry-run 运行中写入该文件的文章，也会在之后的 3 天窗口内被过滤掉。使用 `--dry-run` 时不会更新该文件，方便反复预览同一批候选文章。
+
+## 手动生成组会 PPT
+
+每日简报只做文章筛选、中文摘要和 PPT 讲解思路，不会自动读取全文 PDF，也不会每天自动生成 PPT。如果要生成带原文 Figure 的组会文献汇报 PPT，请手动使用 `paper_to_ppt`：
+
+1. 下载全文 PDF，放入：
+
+```text
+paper_to_ppt/input_papers/
+```
+
+2. 运行：
+
+```bash
+python -m paper_to_ppt.main --input paper_to_ppt/input_papers --output paper_to_ppt/output/group_meeting.pptx
+```
+
+3. 查看输出：
+
+```text
+paper_to_ppt/output/group_meeting.pptx
+paper_to_ppt/output/paper_summary.md
+paper_to_ppt/output/figure_notes.md
+paper_to_ppt/output/missing_info_report.md
+paper_to_ppt/extracted_figures/
+```
+
+`paper_to_ppt` 不会编造 Figure。如果没有稳定提取到原文图片，会在 `figure_notes.md` 里写明“需要人工从 PDF 中裁剪或导出原图”。正式组会前仍需人工核对 Figure 编号、原文出处、论文题目、DOI、样本量、肌肉取材方法和组学类型。
 
 ## GitHub Actions 自动运行
 

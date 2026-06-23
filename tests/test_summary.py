@@ -293,13 +293,58 @@ class SummaryTests(unittest.TestCase):
         )
         self.assertIn("presentation_materials", summary)
         self.assertIn("ppt_preparation", summary)
+        self.assertIn("ppt_ready_fields", summary)
         self.assertIn("missing_info", summary)
         self.assertIn("全文 PDF", summary["missing_info"])
         self.assertEqual(summary["presentation_materials"]["suitability"], "适合")
+        self.assertIn("120", summary["ppt_ready_fields"]["sample_size"])
+        self.assertIn("当前每日简报未读取全文 PDF", summary["ppt_ready_fields"]["figure_advice"])
+        self.assertIn("原文 Figure", summary["ppt_ready_fields"]["needs_confirmation"])
         self.assertTrue(
             any("PPT 必须使用文章原图" in item for item in summary["ppt_preparation"]["figure_principles"])
         )
         self.assertIn("当前未读取全文 PDF", summary["ppt_preparation"]["full_text_notice"])
+
+    def test_ppt_ready_fields_do_not_infer_sample_size_from_ci_p_values_or_years(self):
+        paper = {
+            "title": "Physical activity and cardiometabolic risk in adults",
+            "abstract": (
+                "RESULTS: Physical activity was associated with lower cardiometabolic risk "
+                "(HR 0.84, 95% CI 0.72 to 0.98; p=0.03) in analyses published in 2026. "
+                "CONCLUSIONS: Associations should be interpreted cautiously."
+            ),
+            "journal": "Sports Medicine",
+            "article_types": ["Journal Article"],
+            "matched_keywords": [{"term": "physical activity", "zh": "体力活动"}],
+            "score": 72,
+            "result_specificity_score": 55,
+            "score_breakdown": {},
+        }
+        summary = summarize_paper(paper, {"keywords": []})
+
+        self.assertIn("样本量", summary["missing_info"])
+        self.assertIn("摘要未明确说明", summary["ppt_ready_fields"]["sample_size"])
+        self.assertNotIn("2026", summary["ppt_ready_fields"]["sample_size"])
+        self.assertNotIn("95", summary["ppt_ready_fields"]["sample_size"])
+
+    def test_plain_biopsy_does_not_count_as_muscle_sampling(self):
+        paper = {
+            "title": "Exercise response in adults after clinical biopsy",
+            "abstract": (
+                "METHODS: Participants completed exercise testing after a clinical biopsy. "
+                "RESULTS: Exercise tolerance was described, but the abstract did not specify the sampled tissue."
+            ),
+            "journal": "Medicine & Science in Sports & Exercise",
+            "article_types": ["Journal Article"],
+            "matched_keywords": [{"term": "exercise physiology", "zh": "运动生理"}],
+            "score": 70,
+            "result_specificity_score": 50,
+            "score_breakdown": {},
+        }
+        summary = summarize_paper(paper, {"keywords": []})
+
+        self.assertIn("肌肉取材方法", summary["missing_info"])
+        self.assertIn("摘要未明确说明", summary["ppt_ready_fields"]["muscle_sampling"])
 
 
 def _section(summary, label):

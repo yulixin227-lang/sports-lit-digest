@@ -167,6 +167,13 @@ def summarize_paper(
         body_sections=body_sections,
         journal_metrics=journal_metrics,
     )
+    ppt_ready_fields = _ppt_ready_fields(
+        paper=paper,
+        details=details,
+        presentation_materials=presentation_materials,
+        ppt_preparation=ppt_preparation,
+        missing_info=missing_info,
+    )
 
     return {
         "chinese_title": details["chinese_title"],
@@ -212,6 +219,7 @@ def summarize_paper(
         "presentation_value_reason": paper.get("presentation_value_reason") or presentation_materials["reason"],
         "presentation_materials": presentation_materials,
         "ppt_preparation": ppt_preparation,
+        "ppt_ready_fields": ppt_ready_fields,
         "missing_info": missing_info,
         "classification": classification,
         "dictionary_terms": _dictionary_terms(paper, summary_text),
@@ -1512,9 +1520,8 @@ def _ppt_preparation_info(
             {
                 "title": "第 4 页起：关键 Figure 讲解页",
                 "bullets": [
-                    "Fig 1：需阅读全文并提取原文 Figure 后确定。",
-                    "Fig 2：需阅读全文并提取原文 Figure 后确定。",
-                    "Fig 3：需阅读全文并提取原文 Figure 后确定。",
+                    "当前每日简报未读取全文 PDF，无法确认原文 Figure。",
+                    "若要生成组会 PPT，请下载全文 PDF 后再提取原文 Figure。",
                     "建议优先查看的 Figure 类型：" + "、".join(figure_suggestions),
                 ],
             },
@@ -1535,6 +1542,34 @@ def _ppt_preparation_info(
             "每张图应解释：展示了什么、证明了什么、对研究结论的作用、在文章写作中的意义。",
             "文献名和 DOI 放在每页底部。",
         ],
+    }
+
+
+def _ppt_ready_fields(
+    *,
+    paper: dict[str, Any],
+    details: dict[str, str],
+    presentation_materials: dict[str, Any],
+    ppt_preparation: dict[str, Any],
+    missing_info: list[str],
+) -> dict[str, Any]:
+    key_data = {
+        str(item.get("label")): str(item.get("value") or NEEDS_FULL_TEXT)
+        for item in presentation_materials.get("key_data", [])
+    }
+    return {
+        "why_study": _compact_or_missing(details.get("why_read") or details.get("research_question") or details.get("review_question"), 220),
+        "innovation": _storyline_innovation(detect_article_type(paper)["key"]),
+        "key_experiments_data": key_data.get("关键结果") or NEEDS_FULL_TEXT,
+        "sample_size": key_data.get("样本量") or NEEDS_FULL_TEXT,
+        "muscle_sampling": key_data.get("肌肉取材方法") or NEEDS_FULL_TEXT,
+        "omics_measured": key_data.get("组学类型") or NEEDS_FULL_TEXT,
+        "important_conclusions": presentation_materials.get("important_conclusions") or [NEEDS_FULL_TEXT],
+        "peer_inspiration": presentation_materials.get("peer_inspiration") or [NEEDS_FULL_TEXT],
+        "suitability": presentation_materials.get("suitability") or "可选",
+        "talking_point": presentation_materials.get("core_talking_point") or NEEDS_FULL_TEXT,
+        "figure_advice": _ppt_figure_advice(ppt_preparation.get("figure_suggestions") or []),
+        "needs_confirmation": _needs_confirmation_text(missing_info),
     }
 
 
@@ -1740,18 +1775,22 @@ def _peer_inspiration(article_type_key: str, details: dict[str, str], direction_
 def _sample_size_text(paper: dict[str, Any], details: dict[str, str]) -> str:
     for key in ["participants", "included_studies", "eligibility"]:
         value = str(details.get(key) or "")
-        if _extract_numbers(value):
+        if _extract_sample_sizes(value):
             return _compact_or_missing(value, 180)
-    numbers = _extract_numbers(str(paper.get("abstract") or ""))
-    return "、".join(numbers[:5]) if numbers else NEEDS_FULL_TEXT
+    numbers = _extract_sample_sizes(str(paper.get("abstract") or ""))
+    return "摘要报告了以下样本/研究数量信息：" + "、".join(numbers[:5]) if numbers else NEEDS_FULL_TEXT
 
 
 def _muscle_sampling_text(paper: dict[str, Any]) -> str:
     blob = normalize_text(str(paper.get("abstract") or "") + " " + str(paper.get("title") or ""))
-    if "muscle biopsy" in blob or "biopsy" in blob:
+    if "muscle biopsy" in blob:
         return "摘要提到 muscle biopsy/biopsy；具体肌肉部位需阅读全文确认。"
     for term, label in [
         ("vastus lateralis", "股外侧肌"),
+        ("gastrocnemius", "腓肠肌"),
+        ("soleus", "比目鱼肌"),
+        ("quadriceps", "股四头肌"),
+        ("skeletal muscle tissue", "骨骼肌组织"),
         ("skeletal muscle sample", "骨骼肌样本"),
         ("muscle tissue", "肌肉组织"),
     ]:
@@ -1774,11 +1813,45 @@ def _omics_type_text(paper: dict[str, Any]) -> str:
         ("metabolomics", "metabolomics"),
         ("metabolomic", "metabolomics"),
         ("dna methylation", "DNA methylation"),
+        ("chip-seq", "ChIP-seq"),
         ("spatial transcriptomics", "spatial transcriptomics"),
+        ("multi-omics", "multi-omics"),
+        ("multi omics", "multi-omics"),
     ]:
         if term in blob and label not in omics:
             omics.append(label)
     return " / ".join(omics) if omics else NEEDS_FULL_TEXT
+
+
+def _ppt_figure_advice(figure_suggestions: list[str]) -> str:
+    base = [
+        "当前每日简报未读取全文 PDF，无法确认原文 Figure。",
+        "若要生成组会 PPT，请下载全文 PDF 后重点查看：" + "、".join(figure_suggestions or ["Graphical abstract", "Study design figure", "Main result figures"]),
+    ]
+    return " ".join(base)
+
+
+def _needs_confirmation_text(missing_info: list[str]) -> str:
+    if not missing_info:
+        return "正式组会前仍建议阅读全文并核对原文 Figure。"
+    return "需阅读全文确认：" + "、".join(missing_info)
+
+
+def _extract_sample_sizes(text: str) -> list[str]:
+    if not text:
+        return []
+    patterns = [
+        r"\bn\s*=\s*\d+(?:,\d{3})*\b",
+        r"\b\d+(?:,\d{3})*\s+(?:participants|patients|adults|athletes|subjects|children|men|women|cases|controls|individuals|volunteers|hips)\b",
+        r"\b\d+(?:,\d{3})*\s+(?:studies|trials|articles)\b",
+    ]
+    found: list[str] = []
+    for pattern in patterns:
+        for match in re.findall(pattern, text, flags=re.IGNORECASE):
+            cleaned = re.sub(r"\s+", " ", match).strip()
+            if cleaned not in found:
+                found.append(cleaned)
+    return found
 
 
 def _technology_text(paper: dict[str, Any]) -> str:
@@ -1820,7 +1893,7 @@ def _figure_type_suggestions(article_type_key: str, paper: dict[str, Any]) -> li
 
 def _has_sample_size(details: dict[str, str], body_sections: list[dict[str, str]], paper: dict[str, Any]) -> bool:
     text = " ".join([str(value) for value in details.values()] + [str(section.get("value") or "") for section in body_sections])
-    return bool(_extract_numbers(text) or _extract_numbers(str(paper.get("abstract") or "")))
+    return bool(_extract_sample_sizes(text) or _extract_sample_sizes(str(paper.get("abstract") or "")))
 
 
 def _has_effect_detail(paper: dict[str, Any], details: dict[str, str], body_sections: list[dict[str, str]]) -> bool:
