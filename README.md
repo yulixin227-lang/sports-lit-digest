@@ -38,6 +38,7 @@ PUBMED_RETMAX=100
 DIGEST_MIN_SCORE=70
 DIGEST_MAX_PAPERS=5
 SKIP_EMPTY_PUSH=true
+SEND_EMPTY_STATUS=true
 
 PUBLIC_DIGEST_BASE_URL=
 WXPUSHER_SPT_ENABLED=false
@@ -89,13 +90,22 @@ python -m src.main --days-back 3 --dry-run --send-wechat --wechat-mode short
 python -m src.main --days-back 3 --send-wechat --wechat-mode short
 ```
 
-如果 `SKIP_EMPTY_PUSH=true`，当最终推荐为 0 篇时，程序仍会生成空简报文件，但不会发送空微信消息，并在命令行提示：
+如果最终推荐为 0 篇，程序仍会生成 empty digest 文件。默认 `SEND_EMPTY_STATUS=true`，此时不会推送低价值文章，但会发送一条“今日无高质量主推荐”的微信状态通知，说明系统已正常运行、初筛文章数量、主推荐数量、可选观察数量和网页入口。
+
+如果你希望 selected=0 时完全不发微信，把 `.env` 或 GitHub Actions 环境变量设为：
+
+```env
+SEND_EMPTY_STATUS=false
+SKIP_EMPTY_PUSH=true
+```
+
+这时程序才会在命令行提示：
 
 ```text
 No selected papers; skipped WeChat push.
 ```
 
-`--dry-run --send-wechat` 仍可预览空简报对应的微信摘要，不会真实发送，也不会更新去重文件。
+`--dry-run --send-wechat` 仍可预览 selected=0 时对应的微信状态通知或空简报摘要，不会真实发送，也不会更新去重文件。
 
 微信推送支持三种模式：
 
@@ -283,7 +293,11 @@ config/journal_metrics.yaml
 - `metrics_source`：数据来源，当前建议写 `manual`
 - `notes`：维护备注
 
-建议每年根据学校数据库、Journal Citation Reports 和中科院分区表更新一次。不要编造影响因子或分区；如果暂时查不到，就保持 `null`，最终 digest 会显示“未配置”。如果学校数据库能查到 JCR 和中科院分区，可以把结果填入 `journal_metrics.yaml`，并在 `notes` 里记录来源或更新时间。
+期刊名匹配会做基础标准化：忽略大小写、去掉标点和括号内地点信息、把 `&` 和 `and` 视为等价，并支持 `aliases`。例如 `Sports medicine (Auckland, N.Z.)` 会匹配到 `Sports Medicine`，`Medicine and science in sports and exercise` 会匹配到 `Medicine & Science in Sports & Exercise`。
+
+建议每年根据学校数据库、Journal Citation Reports 和中科院分区表更新一次。不要编造影响因子或分区；如果暂时查不到影响因子，就保持 `impact_factor: null`，最终 digest 会显示“影响因子：未配置”。如果已经确认 JCR 或中科院分区，请填入 `jcr_quartile`、`jcr_category`、`cas_zone` 和 `cas_category`，并在 `notes` 里记录来源或更新时间。
+
+当前已补充常见期刊配置，包括 `Sports Medicine`、`British Journal of Sports Medicine`、`Medicine & Science in Sports & Exercise`、`Journal of the International Society of Sports Nutrition`、`Nature Communications` 和 `Cardiovascular Diabetology`。其中影响因子仍需人工确认后再填写。
 
 ## 修改关键词
 
@@ -390,7 +404,7 @@ https://<你的GitHub用户名>.github.io/sports-lit-digest/
 
 首页 `outputs/index.html` 会在每次生成 digest 时自动更新，显示最新简报链接和历史简报列表。微信 short 模式末尾会同时放【阅读全文】和【历史简报】两个链接。
 
-如果你的仓库名不是 `sports-lit-digest`，最后一段路径要换成实际仓库名。`SKIP_EMPTY_PUSH=true` 是默认值：如果当天 3 天窗口内没有新的入选文章，会生成 empty digest，但不会推送空微信消息。去重文件 `data/seen_papers.json` 在 workflow 中通过 GitHub Actions cache 恢复和保存，避免每天查最近 3 天时重复推送同一篇文章。
+如果你的仓库名不是 `sports-lit-digest`，最后一段路径要换成实际仓库名。`SEND_EMPTY_STATUS=true` 是默认值：如果当天 3 天窗口内没有新的高质量主推荐文章，会生成 empty digest，并发送一条“今日无高质量主推荐”的微信状态通知，证明 workflow、Pages 和 WxPusher 通路正常。去重文件 `data/seen_papers.json` 在 workflow 中通过 GitHub Actions cache 恢复和保存，避免每天查最近 3 天时重复推送同一篇文章。
 
 ### 发布到 GitHub Pages
 
@@ -441,7 +455,7 @@ NCBI_API_KEY
 CROSSREF_MAILTO
 ```
 
-`SKIP_EMPTY_PUSH` 默认在 workflow 中设为 `true`，通常不需要放进 Secret。
+`SKIP_EMPTY_PUSH=true` 和 `SEND_EMPTY_STATUS=true` 默认在 workflow 中设置，通常不需要放进 Secret。前者避免推送空长文，后者在 selected=0 时发送短状态通知。
 
 如果用 SPT，配置 `WXPUSHER_SPT_ENABLED=true` 和 `WXPUSHER_SPT_URL` 即可；如果用标准发送，配置 `WXPUSHER_APP_TOKEN`，并至少配置 `WXPUSHER_UIDS` 或 `WXPUSHER_TOPIC_IDS` 之一。如果两套都配置，程序优先使用标准发送，SPT 作为 fallback。
 

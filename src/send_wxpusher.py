@@ -426,6 +426,15 @@ def build_wechat_message(
     overview = _build_overview(papers, metadata, start_date, end_date)
     warnings = metadata.get("warnings") or []
 
+    if metadata.get("empty_status") and not papers:
+        return build_empty_status_message(
+            metadata=metadata,
+            digest_date=digest_date,
+            start_date=start_date,
+            end_date=end_date,
+            html_path=html_path,
+        )
+
     title = f"每日运动科学文献简报 | {digest_date}"
     lines = [
         title,
@@ -527,6 +536,45 @@ def build_wechat_message(
         "content": content,
         "public_url": public_url,
         "digest_location": digest_location,
+    }
+
+
+def build_empty_status_message(
+    *,
+    metadata: dict[str, Any],
+    digest_date: str,
+    start_date: str,
+    end_date: str,
+    html_path: Path,
+) -> dict[str, str]:
+    public_index_url = build_public_index_url(html_path)
+    index_location = public_index_url or str(html_path.parent / "index.html")
+    title = f"每日运动科学文献简报 | 今日无高质量主推荐"
+    fetched_count = metadata.get("fetched_count", 0)
+    selected_count = metadata.get("selected_count", 0)
+    optional_count = metadata.get("optional_observation_count", 0)
+    lines = [
+        title,
+        "",
+        "今天系统已正常运行。",
+        f"检索范围：{start_date} 至 {end_date}",
+        f"初筛文章：{fetched_count} 篇",
+        f"主推荐文章：{selected_count} 篇",
+        f"可选观察文章：{optional_count} 篇",
+        "原因：本次没有文章同时满足相关性、结果具体性和组会汇报价值门槛。",
+        "说明：系统已按“宁可少推，不推低价值文章”的规则过滤低相关或低信息量文章。",
+        "",
+        "网页入口：",
+        _format_wechat_link(index_location),
+    ]
+    if not public_index_url:
+        lines.append("提示：手机微信可能无法打开本地路径。建议配置 PUBLIC_DIGEST_BASE_URL，并用 GitHub Pages 托管 outputs。")
+    return {
+        "title": title,
+        "summary": f"今日无高质量主推荐｜初筛 {fetched_count} 篇｜可选观察 {optional_count} 篇",
+        "content": "\n".join(lines).strip(),
+        "public_url": public_index_url,
+        "digest_location": index_location,
     }
 
 

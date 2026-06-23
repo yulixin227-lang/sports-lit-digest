@@ -19,6 +19,7 @@ def load_journal_metrics_config(path: Path | None = None) -> dict[str, Any]:
 
 def normalize_journal_name(value: Any) -> str:
     text = str(value or "").strip().lower()
+    text = re.sub(r"\([^)]*\)", " ", text)
     text = text.replace("&", " and ")
     text = re.sub(r"[^a-z0-9]+", " ", text)
     return re.sub(r"\s+", " ", text).strip()
@@ -129,7 +130,7 @@ def _join_metric_pair(primary: str, category: str) -> str:
     if category == UNCONFIGURED:
         return primary
     if primary == UNCONFIGURED:
-        return category
+        return f"{UNCONFIGURED} / {category}"
     return f"{primary} / {category}"
 
 

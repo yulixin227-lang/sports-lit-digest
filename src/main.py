@@ -74,6 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     min_score = int_env("DIGEST_MIN_SCORE", int(scoring_config.get("threshold", 70)))
     max_papers = int_env("DIGEST_MAX_PAPERS", int(scoring_config.get("max_papers", 5)))
     skip_empty_push = bool_env("SKIP_EMPTY_PUSH", True)
+    send_empty_status = bool_env("SEND_EMPTY_STATUS", True)
     selection_seen = empty_seen() if args.force_send else seen
     selected = select_top_papers(
         scored,
@@ -82,7 +83,9 @@ def main(argv: list[str] | None = None) -> int:
         max_papers=max_papers,
         scoring_config=scoring_config,
     )
+    optional_observation_count = count_optional_observation(scored, selected)
     summaries = summarize_papers(selected, keywords_config, journal_metrics_config)
+    journal_metrics_debug = build_journal_metrics_debug(summaries)
 
     md_path, html_path = render_digest(
         summaries,
@@ -96,9 +99,11 @@ def main(argv: list[str] | None = None) -> int:
             "fetched_count": len(papers),
             "scored_count": len(scored),
             "selected_count": len(selected),
+            "optional_observation_count": optional_observation_count,
             "min_score": min_score,
             "max_papers": max_papers,
             "skip_empty_push": skip_empty_push,
+            "send_empty_status": send_empty_status,
             "force_send": args.force_send,
             "warnings": warnings,
         },
@@ -109,21 +114,39 @@ def main(argv: list[str] | None = None) -> int:
         "fetched_count": len(papers),
         "scored_count": len(scored),
         "selected_count": len(selected),
+        "optional_observation_count": optional_observation_count,
         "min_score": min_score,
         "max_papers": max_papers,
         "skip_empty_push": skip_empty_push,
+        "send_empty_status": send_empty_status,
         "force_send": args.force_send,
         "warnings": warnings,
     }
     requested_wechat_mode = "full" if args.wechat_full else args.wechat_mode
     effective_wechat_mode = resolve_wechat_mode(requested_wechat_mode, len(selected))
+    empty_status_requested = should_send_empty_status(
+        send_wechat=args.send_wechat,
+        selected_count=len(selected),
+        fetched_count=len(papers),
+        send_empty_status=send_empty_status,
+        force_send=args.force_send,
+    )
+    if empty_status_requested:
+        send_metadata["empty_status"] = True
+        effective_wechat_mode = "short"
+    empty_status_sent = False
+    wechat_push_status = "not requested"
     if should_skip_wechat_push(
         send_wechat=args.send_wechat,
         dry_run=args.dry_run,
         skip_empty_push=skip_empty_push,
+        send_empty_status=send_empty_status,
+        fetched_count=len(papers),
         selected_count=len(selected),
+        force_send=args.force_send,
     ):
         print("No selected papers; skipped WeChat push.")
+        wechat_push_status = "skipped"
     elif args.send_wechat:
         send_result = send_wechat_digest(
             provider=args.wechat_provider,
@@ -137,7 +160,9 @@ def main(argv: list[str] | None = None) -> int:
             wechat_mode=effective_wechat_mode,
             markdown_path=md_path,
         )
+        empty_status_sent = bool(empty_status_requested and send_result.sent)
         if args.dry_run and effective_wechat_mode == "full":
+            wechat_push_status = "dry-run"
             print("Wechat full dry-run:")
             print(f"WxPusher Mode: {send_result.mode or 'none'}")
             print(f"Wechat Mode: {requested_wechat_mode} -> {effective_wechat_mode}")
@@ -148,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"Digest: {send_result.digest_location or str(md_path)}")
         elif args.dry_run:
+            wechat_push_status = "dry-run"
             print("Wechat dry-run:")
             print(f"WxPusher Mode: {send_result.mode or 'none'}")
             print(f"Wechat Mode: {requested_wechat_mode} -> {effective_wechat_mode}")
@@ -160,6 +186,7 @@ def main(argv: list[str] | None = None) -> int:
             print("Wechat message preview:")
             print(send_result.preview)
         elif send_result.sent:
+            wechat_push_status = "sent"
             print(f"Wechat push sent via {send_result.provider}.")
             print(f"Wechat Mode: {requested_wechat_mode} -> {effective_wechat_mode}")
             if send_result.full_body:
@@ -171,6 +198,7 @@ def main(argv: list[str] | None = None) -> int:
             if send_result.response is not None:
                 print(f"WxPusher response: {json.dumps(_sanitize_push_response(send_result.response), ensure_ascii=False)}")
         else:
+            wechat_push_status = "failed or skipped"
             print(f"Wechat push skipped or failed via {send_result.provider}.")
             print(f"Wechat Mode: {requested_wechat_mode} -> {effective_wechat_mode}")
             if send_result.full_body:
@@ -189,6 +217,12 @@ def main(argv: list[str] | None = None) -> int:
         write_seen(seen_path, seen)
 
     print(f"Fetched: {len(papers)} | Selected: {len(selected)} | Dry run: {args.dry_run}")
+    print(f"Main selected: {len(selected)}")
+    print(f"Optional observation: {optional_observation_count}")
+    print(f"Empty status enabled: {str(send_empty_status).lower()}")
+    print(f"Empty status sent: {str(empty_status_sent).lower()}")
+    print(f"WeChat push status: {wechat_push_status}")
+    print_journal_metrics_debug(journal_metrics_debug)
     print(f"Markdown: {md_path}")
     print(f"HTML: {html_path}")
     if args.dry_run:
@@ -261,14 +295,95 @@ def empty_seen() -> dict[str, set[str]]:
     return {"dois": set(), "pmids": set()}
 
 
+def count_optional_observation(scored: list[dict[str, Any]], selected: list[dict[str, Any]]) -> int:
+    selected_keys = {_paper_identity(paper) for paper in selected}
+    return sum(1 for paper in scored if _paper_identity(paper) not in selected_keys)
+
+
+def should_send_empty_status(
+    *,
+    send_wechat: bool,
+    selected_count: int,
+    fetched_count: int,
+    send_empty_status: bool,
+    force_send: bool,
+) -> bool:
+    return bool(
+        send_wechat
+        and selected_count == 0
+        and send_empty_status
+        and (fetched_count > 0 or force_send)
+    )
+
+
 def should_skip_wechat_push(
     *,
     send_wechat: bool,
     dry_run: bool,
     skip_empty_push: bool,
     selected_count: int,
+    send_empty_status: bool = False,
+    fetched_count: int = 0,
+    force_send: bool = False,
 ) -> bool:
-    return bool(send_wechat and not dry_run and skip_empty_push and selected_count == 0)
+    if not send_wechat or dry_run or selected_count > 0:
+        return False
+    if should_send_empty_status(
+        send_wechat=send_wechat,
+        selected_count=selected_count,
+        fetched_count=fetched_count,
+        send_empty_status=send_empty_status,
+        force_send=force_send,
+    ):
+        return False
+    return bool(skip_empty_push)
+
+
+def build_journal_metrics_debug(summaries: list[dict[str, Any]]) -> dict[str, list[str]]:
+    matched: list[str] = []
+    unmatched: list[str] = []
+    seen: set[str] = set()
+    for paper in summaries:
+        raw_name = str(paper.get("journal") or "").strip() or "未提供期刊名"
+        key = raw_name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        metrics = paper.get("journal_metrics") or {}
+        if metrics.get("configured"):
+            matched.append(
+                f"{raw_name} -> {metrics.get('display_name', '未配置')} | "
+                f"JCR: {metrics.get('jcr_quartile', '未配置')} | "
+                f"CAS: {metrics.get('cas_zone', '未配置')} | "
+                f"source: {metrics.get('metrics_source', '未配置')}"
+            )
+        else:
+            unmatched.append(raw_name)
+    return {"matched": matched, "unmatched": unmatched}
+
+
+def print_journal_metrics_debug(debug: dict[str, list[str]]) -> None:
+    print("Journal metrics matched:")
+    matched = debug.get("matched") or []
+    if matched:
+        for item in matched:
+            print(f"* {item}")
+    else:
+        print("* none")
+    print("Journal metrics unmatched:")
+    unmatched = debug.get("unmatched") or []
+    if unmatched:
+        for item in unmatched:
+            print(f"* {item}")
+    else:
+        print("* none")
+
+
+def _paper_identity(paper: dict[str, Any]) -> str:
+    doi = str(paper.get("doi") or "").strip().lower()
+    pmid = str(paper.get("pmid") or "").strip().lower()
+    title = str(paper.get("title") or "").strip().lower()
+    return doi or pmid or title
 
 
 def resolve_wechat_mode(requested_mode: str, selected_count: int) -> str:

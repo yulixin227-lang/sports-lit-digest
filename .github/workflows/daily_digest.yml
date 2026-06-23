@@ -56,6 +56,7 @@ jobs:
       PUBLIC_DIGEST_BASE_URL: ${{ secrets.PUBLIC_DIGEST_BASE_URL }}
       DIGEST_TIMEZONE: Asia/Taipei
       SKIP_EMPTY_PUSH: "true"
+      SEND_EMPTY_STATUS: "true"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

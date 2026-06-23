@@ -7,6 +7,7 @@ from unittest.mock import patch
 from src.send_wxpusher import (
     WXPUSHER_SEND_URL,
     WXPUSHER_SIMPLE_SEND_URL,
+    build_empty_status_message,
     build_wechat_message,
     extract_spt_from_url,
     send_wxpusher_digest,
@@ -103,6 +104,49 @@ class WxPusherTests(unittest.TestCase):
 
         self.assertIn("手机微信可能无法打开本地路径", message["content"])
         self.assertIn("outputs", message["content"])
+
+    def test_empty_status_message_uses_public_index_url(self):
+        with patch.dict(os.environ, {"PUBLIC_DIGEST_BASE_URL": "https://example.com/digests"}, clear=False):
+            message = build_empty_status_message(
+                metadata={
+                    "fetched_count": 4,
+                    "selected_count": 0,
+                    "optional_observation_count": 4,
+                },
+                digest_date="2026-06-23",
+                start_date="2026-06-17",
+                end_date="2026-06-23",
+                html_path=Path("outputs/2026-06-23-digest.html"),
+            )
+
+        self.assertEqual(message["title"], "每日运动科学文献简报 | 今日无高质量主推荐")
+        self.assertIn("今天系统已正常运行", message["content"])
+        self.assertIn("初筛文章：4 篇", message["content"])
+        self.assertIn("主推荐文章：0 篇", message["content"])
+        self.assertIn("可选观察文章：4 篇", message["content"])
+        self.assertIn("宁可少推，不推低价值文章", message["content"])
+        self.assertIn("[https://example.com/digests/](https://example.com/digests/)", message["content"])
+        self.assertEqual(message["public_url"], "https://example.com/digests/")
+
+    def test_build_wechat_message_uses_empty_status_when_requested(self):
+        with patch.dict(os.environ, {"PUBLIC_DIGEST_BASE_URL": "https://example.com/digests"}, clear=False):
+            message = build_wechat_message(
+                papers=[],
+                metadata={
+                    "empty_status": True,
+                    "fetched_count": 2,
+                    "selected_count": 0,
+                    "optional_observation_count": 2,
+                },
+                digest_date="2026-06-23",
+                start_date="2026-06-21",
+                end_date="2026-06-23",
+                html_path=Path("outputs/2026-06-23-digest.html"),
+            )
+
+        self.assertIn("今日无高质量主推荐", message["title"])
+        self.assertIn("系统已正常运行", message["content"])
+        self.assertNotIn("今日最值得读", message["content"])
 
     def test_dry_run_does_not_require_credentials(self):
         with patch.dict(

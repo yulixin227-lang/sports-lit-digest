@@ -25,6 +25,35 @@ class JournalMetricsTests(unittest.TestCase):
 
         self.assertEqual(metrics["display_name"], "British Journal of Sports Medicine")
 
+    def test_sports_medicine_auckland_alias_matches(self):
+        config = load_journal_metrics_config()
+
+        metrics = get_journal_metrics("Sports medicine (Auckland, N.Z.)", config)
+
+        self.assertTrue(metrics["configured"])
+        self.assertEqual(metrics["display_name"], "Sports Medicine")
+        self.assertEqual(metrics["jcr_display"], "Q1 / Sport Sciences")
+        self.assertEqual(metrics["cas_display"], "一区 / 体育科学")
+
+    def test_medicine_and_science_alias_matches_ampersand_title(self):
+        config = load_journal_metrics_config()
+
+        metrics = get_journal_metrics("Medicine and science in sports and exercise", config)
+
+        self.assertTrue(metrics["configured"])
+        self.assertEqual(metrics["display_name"], "Medicine & Science in Sports & Exercise")
+        self.assertEqual(metrics["jcr_display"], "Q1 / Sport Sciences")
+
+    def test_nature_communications_case_alias_matches(self):
+        config = load_journal_metrics_config()
+
+        metrics = get_journal_metrics("Nature communications", config)
+
+        self.assertTrue(metrics["configured"])
+        self.assertEqual(metrics["display_name"], "Nature Communications")
+        self.assertEqual(metrics["jcr_display"], "Q1 / Multidisciplinary Sciences")
+        self.assertEqual(metrics["cas_display"], "一区 / 综合性期刊")
+
     def test_unknown_journal_returns_unconfigured_values(self):
         metrics = get_journal_metrics("Unknown Exercise Journal", {"journals": {}})
 
