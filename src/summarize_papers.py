@@ -10,6 +10,8 @@ from .utils import normalize_doi, normalize_text
 
 
 MISSING = "摘要中未提供。"
+NEEDS_FULL_TEXT = "摘要未明确说明，需阅读全文确认。"
+FULL_TEXT_FIGURE_NOTICE = "当前未读取全文 PDF，Figure 内容需人工核对原文。"
 LOW_INFORMATION_PHRASES = [
     "存在关联",
     "提供参考",
@@ -143,10 +145,33 @@ def summarize_paper(
     direction_display = classification.get("direction_display") or "未明确分类"
     if direction_display == "未明确分类" and focus_topics:
         direction_display = " / ".join(focus_topics[:3])
+    brief_summary = _brief_summary(paper, details, body_sections, article_type["key"])
+    presentation_value_score = float(paper.get("presentation_value_score") or 0)
+    presentation_materials = _presentation_materials(
+        paper=paper,
+        article_type_key=article_type["key"],
+        details=details,
+        body_sections=body_sections,
+        direction_display=direction_display,
+        presentation_value_score=presentation_value_score,
+    )
+    ppt_preparation = _ppt_preparation_info(
+        paper=paper,
+        article_type_key=article_type["key"],
+        details=details,
+        brief_summary=brief_summary,
+    )
+    missing_info = _missing_information(
+        paper=paper,
+        details=details,
+        body_sections=body_sections,
+        journal_metrics=journal_metrics,
+    )
 
     return {
         "chinese_title": details["chinese_title"],
         "title": paper.get("title") or "Untitled",
+        "english_title": paper.get("title") or "Untitled",
         "journal": journal,
         "journal_metrics": journal_metrics,
         "year": paper.get("year") or _year_from_date(paper.get("publication_date")) or "年份待补全",
@@ -158,6 +183,7 @@ def summarize_paper(
         "article_type_label": article_type["label"],
         "template_name": article_type["template"],
         "one_sentence_conclusion": details["one_sentence_conclusion"],
+        "brief_summary": brief_summary,
         "why_read": details["why_read"],
         "evidence_strength": _evidence_strength(article_type["key"]),
         "my_judgment": details["my_judgment"],
@@ -182,6 +208,11 @@ def summarize_paper(
         "personal_relevance_score": paper.get("personal_relevance_score")
         or classification.get("personal_relevance_score")
         or 0,
+        "presentation_value_score": presentation_value_score,
+        "presentation_value_reason": paper.get("presentation_value_reason") or presentation_materials["reason"],
+        "presentation_materials": presentation_materials,
+        "ppt_preparation": ppt_preparation,
+        "missing_info": missing_info,
         "classification": classification,
         "dictionary_terms": _dictionary_terms(paper, summary_text),
         "top_pick_reason": _top_pick_reason(article_type["key"], keyword_terms, details),
@@ -1353,6 +1384,457 @@ def _focus_topics_from_terms(
         topics.append("重返运动")
     topics.extend(label for label in keyword_labels if label not in topics)
     return list(dict.fromkeys(topics))[:5]
+
+
+def _brief_summary(
+    paper: dict[str, Any],
+    details: dict[str, str],
+    body_sections: list[dict[str, str]],
+    article_type_key: str,
+) -> str:
+    study_design = _article_type_summary_label(article_type_key)
+    participants = _first_available(
+        details,
+        body_sections,
+        ["participants", "eligibility", "included_studies"],
+        ["研究对象", "研究对象 / 纳入标准", "纳入研究数量 / 样本量", "纳入研究数量"],
+    )
+    exposure = _first_available(
+        details,
+        body_sections,
+        ["intervention", "exposure", "included_types"],
+        ["干预方案", "暴露因素 / 分组变量", "干预/暴露", "纳入研究类型"],
+    )
+    outcomes = _first_available(
+        details,
+        body_sections,
+        ["outcomes", "review_question", "research_question"],
+        ["测试指标", "主要结局指标", "结局指标", "研究问题", "综述问题"],
+    )
+    key_results = _first_available(
+        details,
+        body_sections,
+        ["main_results", "associations", "pooled_effects", "theme_distribution"],
+        ["主要结果", "主要关联结果", "合并效应或主要发现", "主要发现"],
+    )
+    meaning = _first_available(
+        details,
+        body_sections,
+        ["inspiration", "why_read"],
+        ["实践启发", "实践价值", "为什么值得看"],
+    )
+
+    pieces = [
+        f"研究设计：{study_design}",
+        f"对象/样本：{_compact_or_missing(participants, 150)}",
+        f"干预/暴露：{_compact_or_missing(exposure, 150)}",
+        f"主要结局：{_compact_or_missing(outcomes, 150)}",
+        f"关键结果：{_compact_or_missing(key_results, 230)}",
+        f"意义：{_compact_or_missing(meaning, 180)}",
+    ]
+    return "；".join(pieces) + "。"
+
+
+def _presentation_materials(
+    *,
+    paper: dict[str, Any],
+    article_type_key: str,
+    details: dict[str, str],
+    body_sections: list[dict[str, str]],
+    direction_display: str,
+    presentation_value_score: float,
+) -> dict[str, Any]:
+    if presentation_value_score <= 0:
+        presentation_value_score = _infer_presentation_value(paper, details)
+    suitability, priority = _presentation_level(presentation_value_score)
+    reason = paper.get("presentation_value_reason") or _presentation_reason(
+        suitability,
+        article_type_key,
+        presentation_value_score,
+        direction_display,
+    )
+    key_data = _presentation_key_data(paper, details, body_sections)
+    return {
+        "score": round(presentation_value_score, 1),
+        "suitability": suitability,
+        "priority": priority,
+        "reason": reason,
+        "core_talking_point": _core_talking_point(article_type_key, details, direction_display),
+        "storyline": _presentation_storyline(article_type_key, details, direction_display),
+        "key_data": key_data,
+        "important_conclusions": _important_conclusions(details, body_sections),
+        "peer_inspiration": _peer_inspiration(article_type_key, details, direction_display),
+    }
+
+
+def _ppt_preparation_info(
+    *,
+    paper: dict[str, Any],
+    article_type_key: str,
+    details: dict[str, str],
+    brief_summary: str,
+) -> dict[str, Any]:
+    figure_suggestions = _figure_type_suggestions(article_type_key, paper)
+    return {
+        "short_pages": "3-5 页",
+        "deep_pages": "8-12 页",
+        "full_text_notice": FULL_TEXT_FIGURE_NOTICE,
+        "structure": [
+            {
+                "title": "第 1 页：文章信息",
+                "bullets": [
+                    f"中文题目：{details.get('chinese_title', NEEDS_FULL_TEXT)}",
+                    f"英文题目：{paper.get('title') or NEEDS_FULL_TEXT}",
+                    f"期刊/DOI/分区：使用简报中的期刊、DOI、JCR 分区和中科院分区。",
+                    f"关键词：使用简报关键词。",
+                    f"精简版摘要：{_compact_or_missing(brief_summary, 220)}",
+                ],
+            },
+            {
+                "title": "第 2 页：研究背景与问题",
+                "bullets": [
+                    _compact_or_missing(details.get("why_read"), 180),
+                    _compact_or_missing(details.get("review_question") or details.get("research_question"), 180),
+                    "研究缺口和研究假设需结合引言与全文进一步核对。",
+                ],
+            },
+            {
+                "title": "第 3 页：研究设计总览",
+                "bullets": [
+                    f"研究对象：{_compact_or_missing(details.get('participants') or details.get('eligibility'), 160)}",
+                    f"样本量：{_sample_size_text(paper, details)}",
+                    f"干预/暴露：{_compact_or_missing(details.get('intervention') or details.get('exposure') or details.get('included_types'), 160)}",
+                    f"分组：{_compact_or_missing(details.get('grouping'), 120)}",
+                    f"取材：{_muscle_sampling_text(paper)}",
+                    f"组学/检测技术：{_technology_text(paper)}",
+                ],
+            },
+            {
+                "title": "第 4 页起：关键 Figure 讲解页",
+                "bullets": [
+                    "Fig 1：需阅读全文并提取原文 Figure 后确定。",
+                    "Fig 2：需阅读全文并提取原文 Figure 后确定。",
+                    "Fig 3：需阅读全文并提取原文 Figure 后确定。",
+                    "建议优先查看的 Figure 类型：" + "、".join(figure_suggestions),
+                ],
+            },
+            {
+                "title": "最后页：重要结论与启发",
+                "bullets": [
+                    _compact_or_missing(details.get("author_conclusion") or details.get("one_sentence_conclusion"), 180),
+                    _compact_or_missing(details.get("inspiration") or details.get("my_judgment"), 180),
+                ],
+            },
+        ],
+        "figure_suggestions": figure_suggestions,
+        "figure_principles": [
+            "PPT 必须使用文章原图。",
+            "插图必须来自原文 PDF 或原文附件。",
+            "不允许自己编造图片。",
+            "大图 Fig 可以拆成 Fig A / Fig B / Fig C 单独讲解。",
+            "每张图应解释：展示了什么、证明了什么、对研究结论的作用、在文章写作中的意义。",
+            "文献名和 DOI 放在每页底部。",
+        ],
+    }
+
+
+def _missing_information(
+    *,
+    paper: dict[str, Any],
+    details: dict[str, str],
+    body_sections: list[dict[str, str]],
+    journal_metrics: dict[str, Any],
+) -> list[str]:
+    missing = ["全文 PDF", "原文 Figure"]
+    if not _has_sample_size(details, body_sections, paper):
+        missing.append("样本量")
+    if _muscle_sampling_text(paper) == NEEDS_FULL_TEXT:
+        missing.append("肌肉取材方法")
+    if _omics_type_text(paper) == NEEDS_FULL_TEXT:
+        missing.append("组学类型")
+    if _metric_missing(journal_metrics.get("jcr_quartile")):
+        missing.append("JCR 分区")
+    if _metric_missing(journal_metrics.get("cas_zone")):
+        missing.append("中科院分区")
+    if not _has_effect_detail(paper, details, body_sections):
+        missing.append("具体效应量")
+    if not _has_evidence_quality(details):
+        missing.append("偏倚风险或证据质量")
+    return list(dict.fromkeys(missing))
+
+
+def _first_available(
+    details: dict[str, str],
+    body_sections: list[dict[str, str]],
+    detail_keys: list[str],
+    labels: list[str],
+) -> str:
+    for key in detail_keys:
+        value = str(details.get(key) or "").strip()
+        if _has_real_content(value):
+            return value
+    for section in body_sections:
+        if section.get("label") in labels and _has_real_content(str(section.get("value") or "")):
+            return str(section.get("value"))
+    return NEEDS_FULL_TEXT
+
+
+def _has_real_content(value: str) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    return text not in {MISSING, NEEDS_FULL_TEXT, "摘要中未提供", "摘要中未提供。"} and "未提供" not in text[:18]
+
+
+def _compact_or_missing(value: Any, limit: int = 160) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if not _has_real_content(text):
+        return NEEDS_FULL_TEXT
+    if len(text) <= limit:
+        return text
+    for delimiter in ["。", "；", ";", "，", ",", "、"]:
+        position = text.rfind(delimiter, 0, limit)
+        if position >= 40:
+            return text[: position + 1].strip()
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _article_type_summary_label(article_type_key: str) -> str:
+    return {
+        "systematic_review_meta": "系统综述/Meta 分析",
+        "scoping_review": "范围综述",
+        "experimental": "RCT/干预或实验研究",
+        "observational": "观察性研究/队列研究",
+        "generic": "研究论文",
+    }.get(article_type_key, "研究论文")
+
+
+def _infer_presentation_value(paper: dict[str, Any], details: dict[str, str]) -> float:
+    score = float(paper.get("score") or 0) * 0.35
+    try:
+        score += float(paper.get("result_specificity_score") or 0) * 0.45
+    except (TypeError, ValueError):
+        pass
+    if _has_real_content(details.get("main_results") or details.get("associations") or details.get("pooled_effects") or ""):
+        score += 12
+    if _extract_numbers(str(paper.get("abstract") or "")):
+        score += 8
+    return max(0, min(100, score))
+
+
+def _presentation_level(score: float) -> tuple[str, str]:
+    if score >= 75:
+        return "适合", "高"
+    if score >= 55:
+        return "可选", "中"
+    return "不建议", "低"
+
+
+def _presentation_reason(
+    suitability: str,
+    article_type_key: str,
+    score: float,
+    direction_display: str,
+) -> str:
+    if suitability == "适合":
+        return f"这篇文章的研究问题和结果信息较清楚，且与{direction_display}相关，适合发展成组会汇报。"
+    if suitability == "可选":
+        return f"这篇文章主题相关，但汇报前仍需阅读全文核对方法、结果图和偏倚风险；当前组会价值评分为 {score:.0f}/100。"
+    return f"当前摘要信息或主题相关性不足，不建议作为组会主讲文献；更适合作为背景或候选文献。"
+
+
+def _core_talking_point(article_type_key: str, details: dict[str, str], direction_display: str) -> str:
+    if article_type_key == "systematic_review_meta":
+        return "适合讲研究问题、纳入证据、合并效应和证据质量。"
+    if article_type_key == "scoping_review":
+        return "适合讲证据版图、研究主题分布和未来研究缺口。"
+    if article_type_key == "experimental":
+        return "适合讲 PICO、干预剂量、主要结局和训练/康复实践意义。"
+    if article_type_key == "observational":
+        return "适合讲数据来源、暴露变量、结局变量、风险模型和因果边界。"
+    return f"适合围绕{direction_display}提炼研究问题、方法和主要发现。"
+
+
+def _presentation_storyline(article_type_key: str, details: dict[str, str], direction_display: str) -> list[str]:
+    question = _compact_or_missing(details.get("review_question") or details.get("research_question"), 150)
+    why = _compact_or_missing(details.get("why_read"), 150)
+    result = _compact_or_missing(details.get("main_results") or details.get("associations") or details.get("pooled_effects"), 180)
+    innovation = _storyline_innovation(article_type_key)
+    return [
+        f"作者开展这项研究，是因为{why}",
+        f"前人研究缺口可以概括为：{_gap_text(details)}",
+        f"这篇文章想解决的问题是：{question}",
+        innovation,
+        f"最值得讲的地方是：{result}",
+    ]
+
+
+def _gap_text(details: dict[str, str]) -> str:
+    for key in ["evidence_gap", "limitations", "why_read"]:
+        value = details.get(key)
+        if _has_real_content(str(value or "")):
+            return _compact_or_missing(value, 150)
+    return NEEDS_FULL_TEXT
+
+
+def _storyline_innovation(article_type_key: str) -> str:
+    return {
+        "systematic_review_meta": "创新点主要在于把分散研究进行系统检索、质量评价和定量/定性综合。",
+        "scoping_review": "创新点主要在于用范围综述方式整理证据版图，而不是直接宣称某个干预有效。",
+        "experimental": "创新点应重点看干预设计、剂量控制、结局选择和对照条件。",
+        "observational": "创新点应重点看真实世界数据来源、变量定义、混杂因素调整和风险模型。",
+        "generic": "创新点需要结合全文方法、结果图和讨论部分进一步确认。",
+    }.get(article_type_key, "创新点需要结合全文方法、结果图和讨论部分进一步确认。")
+
+
+def _presentation_key_data(
+    paper: dict[str, Any],
+    details: dict[str, str],
+    body_sections: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    return [
+        {"label": "样本量", "value": _sample_size_text(paper, details)},
+        {"label": "研究对象", "value": _compact_or_missing(details.get("participants") or details.get("eligibility"), 180)},
+        {"label": "分组方式", "value": _compact_or_missing(details.get("grouping"), 140)},
+        {"label": "干预/暴露", "value": _compact_or_missing(details.get("intervention") or details.get("exposure") or details.get("included_types"), 180)},
+        {"label": "肌肉取材方法", "value": _muscle_sampling_text(paper)},
+        {"label": "组学类型", "value": _omics_type_text(paper)},
+        {"label": "主要检测技术", "value": _technology_text(paper)},
+        {"label": "主要结局指标", "value": _compact_or_missing(details.get("outcomes"), 180)},
+        {"label": "关键结果", "value": _compact_or_missing(details.get("main_results") or details.get("associations") or details.get("pooled_effects"), 260)},
+    ]
+
+
+def _important_conclusions(details: dict[str, str], body_sections: list[dict[str, str]]) -> list[str]:
+    candidates = [
+        details.get("one_sentence_conclusion", ""),
+        details.get("author_conclusion", ""),
+        details.get("my_judgment", ""),
+    ]
+    conclusions = []
+    for value in candidates:
+        text = _compact_or_missing(value, 180)
+        if text != NEEDS_FULL_TEXT and text not in conclusions:
+            conclusions.append(text)
+    return conclusions[:3] or [NEEDS_FULL_TEXT]
+
+
+def _peer_inspiration(article_type_key: str, details: dict[str, str], direction_display: str) -> list[str]:
+    base = [
+        "学习它如何把研究问题、对象/样本、暴露或干预、主要结局串成清晰逻辑。",
+        "汇报时重点说明变量选择为什么服务于研究问题，而不是只罗列结果。",
+    ]
+    if article_type_key == "systematic_review_meta":
+        base.extend(["可学习 PICO 定义、纳入排除标准、森林图/亚组分析/偏倚风险图的组织方式。"])
+    elif article_type_key == "observational":
+        base.extend(["可学习如何定义暴露变量、结局变量和混杂因素，并解释为什么观察性研究不能直接说明因果。"])
+    elif article_type_key == "experimental":
+        base.extend(["可学习干预剂量、周期、对照组和主要结局如何共同支撑训练/康复实践意义。"])
+    elif article_type_key == "scoping_review":
+        base.extend(["可学习如何用证据地图说明一个领域目前研究在哪里、缺口在哪里。"])
+    else:
+        base.extend([f"可结合{direction_display}思考它是否能转化为运动科学、代谢、肌肉机制、营养或康复选题。"])
+    return base[:4]
+
+
+def _sample_size_text(paper: dict[str, Any], details: dict[str, str]) -> str:
+    for key in ["participants", "included_studies", "eligibility"]:
+        value = str(details.get(key) or "")
+        if _extract_numbers(value):
+            return _compact_or_missing(value, 180)
+    numbers = _extract_numbers(str(paper.get("abstract") or ""))
+    return "、".join(numbers[:5]) if numbers else NEEDS_FULL_TEXT
+
+
+def _muscle_sampling_text(paper: dict[str, Any]) -> str:
+    blob = normalize_text(str(paper.get("abstract") or "") + " " + str(paper.get("title") or ""))
+    if "muscle biopsy" in blob or "biopsy" in blob:
+        return "摘要提到 muscle biopsy/biopsy；具体肌肉部位需阅读全文确认。"
+    for term, label in [
+        ("vastus lateralis", "股外侧肌"),
+        ("skeletal muscle sample", "骨骼肌样本"),
+        ("muscle tissue", "肌肉组织"),
+    ]:
+        if term in blob:
+            return label
+    return NEEDS_FULL_TEXT
+
+
+def _omics_type_text(paper: dict[str, Any]) -> str:
+    blob = normalize_text(str(paper.get("abstract") or "") + " " + str(paper.get("title") or ""))
+    omics = []
+    for term, label in [
+        ("single-cell rna-seq", "single-cell RNA-seq"),
+        ("scrna-seq", "scRNA-seq"),
+        ("snrna-seq", "snRNA-seq"),
+        ("rna-seq", "RNA-seq"),
+        ("atac-seq", "ATAC-seq"),
+        ("proteomics", "proteomics"),
+        ("proteomic", "proteomics"),
+        ("metabolomics", "metabolomics"),
+        ("metabolomic", "metabolomics"),
+        ("dna methylation", "DNA methylation"),
+        ("spatial transcriptomics", "spatial transcriptomics"),
+    ]:
+        if term in blob and label not in omics:
+            omics.append(label)
+    return " / ".join(omics) if omics else NEEDS_FULL_TEXT
+
+
+def _technology_text(paper: dict[str, Any]) -> str:
+    blob = normalize_text(str(paper.get("abstract") or "") + " " + str(paper.get("title") or ""))
+    technologies = []
+    for term, label in [
+        ("mri", "MRI"),
+        ("3t mri", "3T MRI"),
+        ("multiplex pcr", "multiplex PCR"),
+        ("pcr", "PCR"),
+        ("cox regression", "Cox 回归"),
+        ("regression", "回归模型"),
+        ("electromyography", "肌电图"),
+        ("surface electromyography", "sEMG"),
+        ("rna-seq", "RNA-seq"),
+        ("proteomics", "proteomics"),
+        ("metabolomics", "metabolomics"),
+        ("atac-seq", "ATAC-seq"),
+        ("dna methylation", "DNA methylation"),
+    ]:
+        if term in blob and label not in technologies:
+            technologies.append(label)
+    return " / ".join(technologies) if technologies else NEEDS_FULL_TEXT
+
+
+def _figure_type_suggestions(article_type_key: str, paper: dict[str, Any]) -> list[str]:
+    if article_type_key == "systematic_review_meta":
+        return ["研究筛选流程图", "森林图", "亚组分析图", "偏倚风险图"]
+    if article_type_key == "experimental":
+        return ["研究流程图", "干预方案图", "主要结果图", "组间差异图"]
+    if article_type_key == "observational":
+        return ["研究流程图", "风险模型图", "分层分析图", "敏感性分析图"]
+    if article_type_key == "scoping_review":
+        return ["证据地图", "研究筛选流程图", "主题分布图", "证据缺口图"]
+    if _omics_type_text(paper) != NEEDS_FULL_TEXT:
+        return ["PCA/UMAP", "热图", "火山图", "富集分析图", "机制网络图"]
+    return ["研究设计流程图", "主要结果图", "机制通路图"]
+
+
+def _has_sample_size(details: dict[str, str], body_sections: list[dict[str, str]], paper: dict[str, Any]) -> bool:
+    text = " ".join([str(value) for value in details.values()] + [str(section.get("value") or "") for section in body_sections])
+    return bool(_extract_numbers(text) or _extract_numbers(str(paper.get("abstract") or "")))
+
+
+def _has_effect_detail(paper: dict[str, Any], details: dict[str, str], body_sections: list[dict[str, str]]) -> bool:
+    text = " ".join([str(paper.get("abstract") or ""), *[str(value) for value in details.values()], *[str(section.get("value") or "") for section in body_sections]])
+    normalized = normalize_text(text)
+    return any(term in normalized for term in ["95% ci", "confidence interval", "hazard ratio", "odds ratio", "risk ratio", "effect size", "beta", "smd", "airr", " p<", " p≤", " p="])
+
+
+def _has_evidence_quality(details: dict[str, str]) -> bool:
+    return _has_real_content(details.get("evidence_quality", "")) and "未提供" not in str(details.get("evidence_quality", ""))
+
+
+def _metric_missing(value: Any) -> bool:
+    return value is None or str(value).strip() in {"", "未配置", "摘要中未提供"}
 
 
 def _dictionary_terms(paper: dict[str, Any], summary_text: str) -> list[dict[str, str]]:

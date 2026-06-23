@@ -11,6 +11,11 @@
 {% else %}
 * 今日最值得读：{{ overview.top_pick.reason }}
 {% endif %}
+{% if overview.presentation_pick.index %}
+* 今日最适合组会讲：第 {{ overview.presentation_pick.index }} 篇，{{ overview.presentation_pick.reason }}
+{% else %}
+* 今日最适合组会讲：{{ overview.presentation_pick.reason }}
+{% endif %}
 
 {% if metadata.dry_run %}
 > dry-run：本次不会更新 `data/seen_papers.json`。
@@ -29,6 +34,12 @@
 ## {{ loop.index }}. {{ paper.chinese_title }}
 
 **英文原题**：{{ paper.title }}
+
+**中文题目**：{{ paper.chinese_title }}
+
+**关键词**：{{ paper.keywords_display }}
+
+**精简版摘要**：{{ paper.brief_summary }}
 
 **期刊 / 年份 / DOI / PMID**：{{ paper.journal }} / {{ paper.year }} / {{ paper.doi }} / {{ paper.pmid }}
 
@@ -51,6 +62,10 @@
 
 **是否顶刊雷达**：{{ paper.elite_radar_display }}
 
+**推荐理由**：{{ paper.why_worth_reading }}
+
+**证据边界**：{{ paper.evidence_strength }}
+
 **和我有什么关系**：{{ paper.relation_to_me }}
 
 **推荐指数**：{{ paper.stars }}（{{ paper.recommendation_index }}）
@@ -61,17 +76,80 @@
 
 **结果具体性**：{{ paper.result_specificity_display }}
 
-**关键词**：{{ paper.keywords_display }}
-
 **链接**：{{ paper.link }}
-
-**证据强度提醒**：{{ paper.evidence_strength }}
 
 {% for section in paper.body_sections %}
 **{{ section.label }}**  
 {{ section.value }}
 
 {% endfor %}
+{% set materials = paper.presentation_materials %}
+{% if materials %}
+### 组会汇报素材
+
+* 是否适合做组会汇报：{{ materials.suitability }}
+* 理由：{{ materials.reason }}
+* 推荐汇报优先级：{{ materials.priority }}
+* 组会汇报价值评分：{{ materials.score }}/100
+
+**组会讲解主线**
+
+{% for item in materials.storyline %}
+* {{ item }}
+{% endfor %}
+
+**关键实验和数据**
+
+{% for item in materials.key_data %}
+* {{ item.label }}：{{ item.value }}
+{% endfor %}
+
+**重要结论**
+
+{% for item in materials.important_conclusions %}
+* {{ item }}
+{% endfor %}
+
+**对小同行的启发**
+
+{% for item in materials.peer_inspiration %}
+* {{ item }}
+{% endfor %}
+{% endif %}
+
+{% set ppt = paper.ppt_preparation %}
+{% if ppt %}
+### PPT 生成准备信息
+
+* 建议 PPT 页数：简短汇报 {{ ppt.short_pages }}；组会精讲 {{ ppt.deep_pages }}
+* 全文提醒：{{ ppt.full_text_notice }}
+
+**建议 PPT 结构**
+
+{% for page in ppt.structure %}
+* {{ page.title }}
+{% for bullet in page.bullets %}
+  * {{ bullet }}
+{% endfor %}
+{% endfor %}
+
+**Figure 使用原则**
+
+{% for item in ppt.figure_principles %}
+* {{ item }}
+{% endfor %}
+{% endif %}
+
+### 需要人工核对
+
+{% if paper.missing_info %}
+{% for item in paper.missing_info %}
+* {{ item }}
+{% endfor %}
+{% else %}
+* 当前摘要和元数据已覆盖主要核对项，但正式组会前仍建议阅读全文。
+{% endif %}
+
 ---
 
 {% endfor %}

@@ -255,6 +255,52 @@ class SummaryTests(unittest.TestCase):
         self.assertNotIn("乳清蛋白", summary["chinese_title"])
         self.assertNotIn("动物模型", summary["chinese_title"])
 
+    def test_summary_includes_presentation_ready_required_fields(self):
+        paper = {
+            "title": "High-intensity interval training improves VO2max in adults with obesity",
+            "abstract": (
+                "METHODS: A randomized controlled trial included n=120 adults with obesity. "
+                "Participants completed high-intensity interval training or usual care. "
+                "RESULTS: HIIT improved VO2max and cardiorespiratory fitness. "
+                "CONCLUSIONS: HIIT may support obesity-related fitness improvement."
+            ),
+            "journal": "British Journal of Sports Medicine",
+            "year": 2026,
+            "doi": "10.1000/hiit-obesity",
+            "pmid": "12345678",
+            "article_types": ["Randomized Controlled Trial"],
+            "matched_keywords": [
+                {"term": "HIIT", "zh": "高强度间歇训练"},
+                {"term": "VO2max", "zh": "最大摄氧量"},
+            ],
+            "score": 86,
+            "result_specificity_score": 85,
+            "presentation_value_score": 82,
+            "score_breakdown": {},
+        }
+        summary = summarize_paper(paper, {"keywords": []})
+
+        self.assertEqual(summary["english_title"], paper["title"])
+        self.assertTrue(summary["chinese_title"])
+        self.assertIn("HIIT", summary["keywords_display"])
+        self.assertIn("120", summary["brief_summary"])
+        self.assertEqual(summary["journal"], "British Journal of Sports Medicine")
+        self.assertIn("jcr_display", summary["journal_metrics"])
+        self.assertIn("cas_display", summary["journal_metrics"])
+        self.assertTrue(
+            summary["journal_metrics"]["cas_display"].startswith("一区")
+            or summary["journal_metrics"]["cas_display"] == "未配置"
+        )
+        self.assertIn("presentation_materials", summary)
+        self.assertIn("ppt_preparation", summary)
+        self.assertIn("missing_info", summary)
+        self.assertIn("全文 PDF", summary["missing_info"])
+        self.assertEqual(summary["presentation_materials"]["suitability"], "适合")
+        self.assertTrue(
+            any("PPT 必须使用文章原图" in item for item in summary["ppt_preparation"]["figure_principles"])
+        )
+        self.assertIn("当前未读取全文 PDF", summary["ppt_preparation"]["full_text_notice"])
+
 
 def _section(summary, label):
     for section in summary["body_sections"]:

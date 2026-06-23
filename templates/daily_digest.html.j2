@@ -16,6 +16,8 @@
     }
     h1 { font-size: 30px; line-height: 1.35; margin-bottom: 20px; }
     h2 { font-size: 22px; line-height: 1.4; margin: 0 0 12px; }
+    h3 { font-size: 19px; margin: 28px 0 10px; }
+    h4 { font-size: 16px; margin: 18px 0 6px; }
     .overview {
       border: 1px solid #d0d7de;
       border-radius: 8px;
@@ -48,6 +50,11 @@
       margin: 18px 0;
       color: #24292f;
     }
+    .presentation-block, .ppt-block, .missing-block {
+      border-top: 1px solid #d8dee4;
+      margin-top: 24px;
+      padding-top: 14px;
+    }
     .dict {
       border-top: 1px solid #d0d7de;
       margin-top: 34px;
@@ -71,6 +78,11 @@
       {% else %}
       <li>今日最值得读：{{ overview.top_pick.reason }}</li>
       {% endif %}
+      {% if overview.presentation_pick.index %}
+      <li>今日最适合组会讲：第 {{ overview.presentation_pick.index }} 篇，{{ overview.presentation_pick.reason }}</li>
+      {% else %}
+      <li>今日最适合组会讲：{{ overview.presentation_pick.reason }}</li>
+      {% endif %}
     </ul>
   </section>
 
@@ -90,6 +102,9 @@
   <article class="paper-card">
     <h2>{{ loop.index }}. {{ paper.chinese_title }}</h2>
     <p class="meta"><strong>英文原题：</strong>{{ paper.title }}</p>
+    <p class="meta"><strong>中文题目：</strong>{{ paper.chinese_title }}</p>
+    <p class="meta"><strong>关键词：</strong>{{ paper.keywords_display }}</p>
+    <p class="field"><span class="label">精简版摘要：</span>{{ paper.brief_summary }}</p>
     <p class="meta"><strong>期刊 / 年份 / DOI / PMID：</strong>{{ paper.journal }} / {{ paper.year }} / {{ paper.doi }} / {{ paper.pmid }}</p>
     <section class="journal-metrics">
       <strong>期刊信息</strong>
@@ -107,17 +122,93 @@
     <p class="meta"><strong>研究类型标签：</strong>{{ paper.study_type_display }}</p>
     <p class="meta"><strong>数据来源：</strong>{{ paper.data_source_display }}</p>
     <p class="meta"><strong>是否顶刊雷达：</strong>{{ paper.elite_radar_display }}</p>
+    <p class="field"><span class="label">推荐理由：</span>{{ paper.why_worth_reading }}</p>
+    <p class="evidence"><strong>证据边界：</strong>{{ paper.evidence_strength }}</p>
     <p class="field"><span class="label">和我有什么关系：</span>{{ paper.relation_to_me }}</p>
     <p class="score">推荐指数：{{ paper.stars }}（{{ paper.recommendation_index }}） | 质量评分：{{ paper.score }}/100</p>
     <p class="meta"><strong>阅读优先级：</strong>{{ paper.reading_priority }}</p>
     <p class="meta"><strong>结果具体性：</strong>{{ paper.result_specificity_display }}</p>
-    <p class="meta"><strong>关键词：</strong>{{ paper.keywords_display }}</p>
     <p class="meta"><strong>链接：</strong><a href="{{ paper.link }}">{{ paper.link }}</a></p>
-    <p class="evidence"><strong>证据强度提醒：</strong>{{ paper.evidence_strength }}</p>
 
     {% for section in paper.body_sections %}
     <p class="field"><span class="label">{{ section.label }}：</span>{{ section.value }}</p>
     {% endfor %}
+
+    {% set materials = paper.presentation_materials %}
+    {% if materials %}
+    <section class="presentation-block">
+      <h3>组会汇报素材</h3>
+      <ul>
+        <li>是否适合做组会汇报：{{ materials.suitability }}</li>
+        <li>理由：{{ materials.reason }}</li>
+        <li>推荐汇报优先级：{{ materials.priority }}</li>
+        <li>组会汇报价值评分：{{ materials.score }}/100</li>
+      </ul>
+      <h4>组会讲解主线</h4>
+      <ul>
+        {% for item in materials.storyline %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+      <h4>关键实验和数据</h4>
+      <ul>
+        {% for item in materials.key_data %}
+        <li>{{ item.label }}：{{ item.value }}</li>
+        {% endfor %}
+      </ul>
+      <h4>重要结论</h4>
+      <ul>
+        {% for item in materials.important_conclusions %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+      <h4>对小同行的启发</h4>
+      <ul>
+        {% for item in materials.peer_inspiration %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% set ppt = paper.ppt_preparation %}
+    {% if ppt %}
+    <section class="ppt-block">
+      <h3>PPT 生成准备信息</h3>
+      <ul>
+        <li>建议 PPT 页数：简短汇报 {{ ppt.short_pages }}；组会精讲 {{ ppt.deep_pages }}</li>
+        <li>全文提醒：{{ ppt.full_text_notice }}</li>
+      </ul>
+      <h4>建议 PPT 结构</h4>
+      {% for page in ppt.structure %}
+      <p class="label">{{ page.title }}</p>
+      <ul>
+        {% for bullet in page.bullets %}
+        <li>{{ bullet }}</li>
+        {% endfor %}
+      </ul>
+      {% endfor %}
+      <h4>Figure 使用原则</h4>
+      <ul>
+        {% for item in ppt.figure_principles %}
+        <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    <section class="missing-block">
+      <h3>需要人工核对</h3>
+      <ul>
+        {% if paper.missing_info %}
+        {% for item in paper.missing_info %}
+        <li>{{ item }}</li>
+        {% endfor %}
+        {% else %}
+        <li>当前摘要和元数据已覆盖主要核对项，但正式组会前仍建议阅读全文。</li>
+        {% endif %}
+      </ul>
+    </section>
   </article>
   {% endfor %}
 

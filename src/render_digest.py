@@ -177,6 +177,8 @@ def _build_overview(
             "reason": "当前阈值下没有新文章入选。",
         }
 
+    presentation_pick = _select_presentation_pick(papers)
+
     return {
         "start_date": start_date,
         "end_date": end_date,
@@ -184,6 +186,39 @@ def _build_overview(
         "selected_count": len(papers),
         "focus_topics": " / ".join(focus_topics) if focus_topics else "暂无明确重点方向",
         "top_pick": top_pick,
+        "presentation_pick": presentation_pick,
+    }
+
+
+def _select_presentation_pick(papers: list[dict[str, Any]]) -> dict[str, Any]:
+    if not papers:
+        return {
+            "index": None,
+            "title": "",
+            "reason": "今日没有特别适合组会精讲的文章。",
+        }
+
+    best_index, best_paper = max(
+        enumerate(papers, 1),
+        key=lambda item: float(item[1].get("presentation_value_score") or 0),
+    )
+    score = float(best_paper.get("presentation_value_score") or 0)
+    materials = best_paper.get("presentation_materials") or {}
+    suitability = str(materials.get("suitability") or "")
+    if score < 55 or suitability == "不建议":
+        return {
+            "index": None,
+            "title": "",
+            "reason": "今日没有特别适合组会精讲的文章。",
+        }
+    return {
+        "index": best_index,
+        "title": best_paper.get("chinese_title") or best_paper.get("title") or "",
+        "reason": materials.get("core_talking_point")
+        or best_paper.get("presentation_value_reason")
+        or best_paper.get("why_worth_reading")
+        or "这篇文章的研究问题和结果信息相对更适合做组会讲解。",
+        "score": round(score, 1),
     }
 
 
@@ -228,6 +263,7 @@ def _fallback_markdown(context: dict[str, Any]) -> str:
         f"- 最终推荐：{overview['selected_count']} 篇",
         f"- 本期重点方向：{overview['focus_topics']}",
         f"- 今日最值得读：{_top_pick_text(overview['top_pick'])}",
+        f"- 今日最适合组会讲：{_presentation_pick_text(overview['presentation_pick'])}",
         "",
     ]
 
@@ -295,11 +331,16 @@ def _paper_markdown(index: int, paper: dict[str, Any]) -> list[str]:
         "",
         f"**链接**：{paper['link']}",
         "",
+        f"**精简版摘要**：{_paper_value(paper, 'brief_summary', '摘要未明确说明，需阅读全文确认。')}",
+        "",
         f"**证据强度提醒**：{paper['evidence_strength']}",
         "",
     ]
     for section in paper.get("body_sections") or []:
         lines.extend([f"**{section['label']}**", section["value"], ""])
+    lines.extend(_presentation_markdown(paper))
+    lines.extend(_ppt_markdown(paper))
+    lines.extend(_missing_markdown(paper))
     lines.append("---")
     lines.append("")
     return lines
@@ -327,10 +368,11 @@ def _fallback_html(context: dict[str, Any]) -> str:
         f"<title>每日运动科学文献简报 | {html.escape(context['date'])}</title>",
         "<style>",
         "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans SC',sans-serif;line-height:1.75;max-width:920px;margin:40px auto;padding:0 20px;color:#202124;background:#fff}",
-        "h1{font-size:30px;line-height:1.35;margin-bottom:20px}h2{font-size:22px;line-height:1.4;margin:0 0 12px}h3{font-size:19px;margin-top:32px}",
+        "h1{font-size:30px;line-height:1.35;margin-bottom:20px}h2{font-size:22px;line-height:1.4;margin:0 0 12px}h3{font-size:19px;margin:28px 0 10px}h4{font-size:16px;margin:18px 0 6px}",
         ".overview{border:1px solid #d0d7de;border-radius:8px;padding:18px 20px;background:#f6f8fa;margin-bottom:28px}",
         ".paper-card{border:1px solid #d0d7de;border-radius:8px;padding:22px 24px;margin:24px 0}",
         ".journal-metrics{border:1px solid #d8dee4;border-radius:8px;padding:12px 14px;margin:14px 0;background:#fbfbfd}.journal-metrics ul{margin:6px 0 0 18px;padding:0}",
+        ".presentation-block,.ppt-block,.missing-block{border-top:1px solid #d8dee4;margin-top:24px;padding-top:14px}",
         ".meta{color:#57606a;margin:6px 0}.score{font-weight:700}.field{margin:18px 0}.label{font-weight:700}",
         ".evidence{border-left:4px solid #0969da;background:#f6f8fa;padding:10px 14px;margin:18px 0;color:#24292f}",
         "a{color:#0969da}.dict{border-top:1px solid #d0d7de;margin-top:34px;padding-top:18px}",
@@ -344,6 +386,7 @@ def _fallback_html(context: dict[str, Any]) -> str:
         f"<li>最终推荐：{html.escape(str(overview['selected_count']))} 篇</li>",
         f"<li>本期重点方向：{html.escape(overview['focus_topics'])}</li>",
         f"<li>今日最值得读：{html.escape(_top_pick_text(overview['top_pick']))}</li>",
+        f"<li>今日最适合组会讲：{html.escape(_presentation_pick_text(overview['presentation_pick']))}</li>",
         "</ul></section>",
     ]
 
@@ -390,12 +433,159 @@ def _paper_html(index: int, paper: dict[str, Any]) -> list[str]:
         f"<p class='meta'><strong>结果具体性：</strong>{html.escape(_paper_value(paper, 'result_specificity_display', '未评估'))}</p>",
         f"<p class='meta'><strong>关键词：</strong>{html.escape(str(paper['keywords_display']))}</p>",
         f"<p class='meta'><strong>链接：</strong><a href='{html.escape(str(paper['link']))}'>{html.escape(str(paper['link']))}</a></p>",
+        f"<p class='field'><span class='label'>精简版摘要：</span>{html.escape(_paper_value(paper, 'brief_summary', '摘要未明确说明，需阅读全文确认。'))}</p>",
         f"<p class='evidence'><strong>证据强度提醒：</strong>{html.escape(str(paper['evidence_strength']))}</p>",
     ]
     for section in paper.get("body_sections") or []:
         body.append(_html_field(section["label"], section["value"]))
+    body.extend(_presentation_html(paper))
+    body.extend(_ppt_html(paper))
+    body.extend(_missing_html(paper))
     body.append("</article>")
     return body
+
+
+def _presentation_markdown(paper: dict[str, Any]) -> list[str]:
+    materials = paper.get("presentation_materials") or {}
+    if not materials:
+        return []
+    lines = [
+        "### 组会汇报素材",
+        "",
+        f"- 是否适合做组会汇报：{_dict_value(materials, 'suitability', '可选')}",
+        f"- 理由：{_dict_value(materials, 'reason', '摘要信息不足，需阅读全文后判断。')}",
+        f"- 推荐汇报优先级：{_dict_value(materials, 'priority', '中')}",
+        f"- 组会汇报价值评分：{_dict_value(materials, 'score', '未评分')}/100",
+        "",
+        "**组会讲解主线**",
+        "",
+    ]
+    lines.extend(_markdown_list(materials.get("storyline")))
+    lines.extend(["", "**关键实验和数据**", ""])
+    for item in materials.get("key_data") or []:
+        lines.append(f"- {item.get('label', '信息')}：{item.get('value') or '摘要未明确说明，需阅读全文确认。'}")
+    lines.extend(["", "**重要结论**", ""])
+    lines.extend(_markdown_list(materials.get("important_conclusions")))
+    lines.extend(["", "**对小同行的启发**", ""])
+    lines.extend(_markdown_list(materials.get("peer_inspiration")))
+    lines.append("")
+    return lines
+
+
+def _ppt_markdown(paper: dict[str, Any]) -> list[str]:
+    ppt = paper.get("ppt_preparation") or {}
+    if not ppt:
+        return []
+    lines = [
+        "### PPT 生成准备信息",
+        "",
+        f"- 建议 PPT 页数：简短汇报 {ppt.get('short_pages', '3-5 页')}；组会精讲 {ppt.get('deep_pages', '8-12 页')}",
+        f"- 全文提醒：{ppt.get('full_text_notice', '当前未读取全文 PDF，Figure 内容需人工核对原文。')}",
+        "",
+        "**建议 PPT 结构**",
+        "",
+    ]
+    for page in ppt.get("structure") or []:
+        lines.append(f"- {page.get('title', 'PPT 页面')}")
+        for bullet in page.get("bullets") or []:
+            lines.append(f"  - {bullet}")
+    lines.extend(["", "**Figure 使用原则**", ""])
+    lines.extend(_markdown_list(ppt.get("figure_principles")))
+    lines.append("")
+    return lines
+
+
+def _missing_markdown(paper: dict[str, Any]) -> list[str]:
+    missing = paper.get("missing_info") or []
+    lines = ["### 需要人工核对", ""]
+    if missing:
+        lines.extend(f"- {item}" for item in missing)
+    else:
+        lines.append("- 当前摘要和元数据已覆盖主要核对项，但正式组会前仍建议阅读全文。")
+    lines.append("")
+    return lines
+
+
+def _presentation_html(paper: dict[str, Any]) -> list[str]:
+    materials = paper.get("presentation_materials") or {}
+    if not materials:
+        return []
+    body = [
+        "<section class='presentation-block'>",
+        "<h3>组会汇报素材</h3>",
+        "<ul>",
+        f"<li>是否适合做组会汇报：{html.escape(_dict_value(materials, 'suitability', '可选'))}</li>",
+        f"<li>理由：{html.escape(_dict_value(materials, 'reason', '摘要信息不足，需阅读全文后判断。'))}</li>",
+        f"<li>推荐汇报优先级：{html.escape(_dict_value(materials, 'priority', '中'))}</li>",
+        f"<li>组会汇报价值评分：{html.escape(_dict_value(materials, 'score', '未评分'))}/100</li>",
+        "</ul>",
+        "<h4>组会讲解主线</h4>",
+        _html_list(materials.get("storyline")),
+        "<h4>关键实验和数据</h4>",
+        "<ul>",
+    ]
+    for item in materials.get("key_data") or []:
+        label = html.escape(str(item.get("label") or "信息"))
+        value = html.escape(str(item.get("value") or "摘要未明确说明，需阅读全文确认。"))
+        body.append(f"<li>{label}：{value}</li>")
+    body.extend(
+        [
+            "</ul>",
+            "<h4>重要结论</h4>",
+            _html_list(materials.get("important_conclusions")),
+            "<h4>对小同行的启发</h4>",
+            _html_list(materials.get("peer_inspiration")),
+            "</section>",
+        ]
+    )
+    return body
+
+
+def _ppt_html(paper: dict[str, Any]) -> list[str]:
+    ppt = paper.get("ppt_preparation") or {}
+    if not ppt:
+        return []
+    body = [
+        "<section class='ppt-block'>",
+        "<h3>PPT 生成准备信息</h3>",
+        "<ul>",
+        f"<li>建议 PPT 页数：简短汇报 {html.escape(str(ppt.get('short_pages', '3-5 页')))}；组会精讲 {html.escape(str(ppt.get('deep_pages', '8-12 页')))}</li>",
+        f"<li>全文提醒：{html.escape(str(ppt.get('full_text_notice', '当前未读取全文 PDF，Figure 内容需人工核对原文。')))}</li>",
+        "</ul>",
+        "<h4>建议 PPT 结构</h4>",
+    ]
+    for page in ppt.get("structure") or []:
+        body.append(f"<p class='label'>{html.escape(str(page.get('title') or 'PPT 页面'))}</p>")
+        body.append(_html_list(page.get("bullets")))
+    body.extend(
+        [
+            "<h4>Figure 使用原则</h4>",
+            _html_list(ppt.get("figure_principles")),
+            "</section>",
+        ]
+    )
+    return body
+
+
+def _missing_html(paper: dict[str, Any]) -> list[str]:
+    missing = paper.get("missing_info") or []
+    items = missing or ["当前摘要和元数据已覆盖主要核对项，但正式组会前仍建议阅读全文。"]
+    return [
+        "<section class='missing-block'>",
+        "<h3>需要人工核对</h3>",
+        _html_list(items),
+        "</section>",
+    ]
+
+
+def _markdown_list(values: Any) -> list[str]:
+    items = values or ["摘要未明确说明，需阅读全文确认。"]
+    return [f"- {item}" for item in items]
+
+
+def _html_list(values: Any) -> str:
+    items = values or ["摘要未明确说明，需阅读全文确认。"]
+    return "<ul>" + "".join(f"<li>{html.escape(str(item))}</li>" for item in items) + "</ul>"
 
 
 def _dictionary_html(term_dictionary: list[dict[str, str]]) -> list[str]:
@@ -429,7 +619,20 @@ def _paper_value(paper: dict[str, Any], field: str, default: str) -> str:
     return str(value)
 
 
+def _dict_value(data: dict[str, Any], field: str, default: str) -> str:
+    value = data.get(field)
+    if value is None or str(value).strip() == "":
+        return default
+    return str(value)
+
+
 def _top_pick_text(top_pick: dict[str, Any]) -> str:
     if top_pick.get("index"):
         return f"第 {top_pick['index']} 篇，{top_pick['reason']}"
     return str(top_pick.get("reason") or "今日暂无推荐。")
+
+
+def _presentation_pick_text(presentation_pick: dict[str, Any]) -> str:
+    if presentation_pick.get("index"):
+        return f"第 {presentation_pick['index']} 篇，{presentation_pick['reason']}"
+    return str(presentation_pick.get("reason") or "今日没有特别适合组会精讲的文章。")

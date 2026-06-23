@@ -123,6 +123,46 @@ class ScoringTests(unittest.TestCase):
         self.assertLessEqual(scored["score"], 69)
         self.assertEqual(scored["reading_priority"], "可选阅读")
 
+    def test_presentation_value_score_tracks_information_quality(self):
+        low_info = {
+            "title": "Exercise physiology and training outcomes in adults",
+            "abstract": "BACKGROUND: Exercise is important. CONCLUSIONS: Further research is needed.",
+            "journal": "British Journal of Sports Medicine",
+            "article_types": ["Journal Article"],
+        }
+        high_info = {
+            "title": "High-intensity interval training improves VO2max in adults with obesity",
+            "abstract": (
+                "METHODS: A randomized controlled trial included n=120 adults with obesity. "
+                "Participants completed high-intensity interval training or usual care. "
+                "RESULTS: HIIT improved VO2max with reported between-group differences and 95% CI. "
+                "CONCLUSIONS: HIIT improved cardiorespiratory fitness."
+            ),
+            "journal": "British Journal of Sports Medicine",
+            "article_types": ["Randomized Controlled Trial"],
+        }
+
+        low_scored = score_paper(
+            low_info,
+            REAL_JOURNALS,
+            REAL_KEYWORDS,
+            REAL_SCORING,
+            categories_config=REAL_CATEGORIES,
+            elite_journals_config=REAL_ELITE_JOURNALS,
+        )
+        high_scored = score_paper(
+            high_info,
+            REAL_JOURNALS,
+            REAL_KEYWORDS,
+            REAL_SCORING,
+            categories_config=REAL_CATEGORIES,
+            elite_journals_config=REAL_ELITE_JOURNALS,
+        )
+
+        self.assertLess(low_scored["presentation_value_score"], 50)
+        self.assertGreater(high_scored["presentation_value_score"], low_scored["presentation_value_score"])
+        self.assertGreaterEqual(high_scored["presentation_value_score"], 60)
+
     def test_weakly_related_ptsd_nature_communications_article_is_demoted(self):
         paper = {
             "title": "Integrated proteomic and metabolomic analyses implicate redox-metabolic pathways in PTSD-associated multisystem disease and accelerated aging.",

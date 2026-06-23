@@ -65,6 +65,12 @@ def score_paper(
     elite_radar_score = _elite_radar_boost(classification, scoring_config)
     result_specificity_score = _result_specificity_score(paper)
     result_specificity_penalty = _result_specificity_penalty(result_specificity_score, scoring_config)
+    presentation_value_score = _presentation_value_score(
+        paper,
+        classification,
+        result_specificity_score,
+        matched_keywords,
+    )
 
     total = (
         journal_score
@@ -96,10 +102,18 @@ def score_paper(
         "population_database": round(population_database_score, 1),
         "elite_radar": round(elite_radar_score, 1),
         "result_specificity": round(result_specificity_score, 1),
+        "presentation_value": round(presentation_value_score, 1),
         "result_specificity_penalty": round(-result_specificity_penalty, 1),
         "score_cap": round(capped_total - total, 1),
     }
     paper["result_specificity_score"] = round(result_specificity_score, 1)
+    paper["presentation_value_score"] = round(presentation_value_score, 1)
+    paper["presentation_value_reason"] = _presentation_value_reason(
+        paper,
+        classification,
+        presentation_value_score,
+        result_specificity_score,
+    )
     paper["precision_gate_passed"] = precision_gate["passed"]
     paper["precision_gate_reason"] = precision_gate["reason"]
     paper["reading_priority"] = _reading_priority(paper["score"], result_specificity_score)
@@ -474,6 +488,98 @@ def _reading_priority(score: float, result_specificity_score: float) -> str:
     if score >= 80:
         return "优先阅读"
     return "推荐阅读"
+
+
+def _presentation_value_score(
+    paper: dict[str, Any],
+    classification: dict[str, Any],
+    result_specificity_score: float,
+    matched_keywords: list[dict[str, Any]] | None = None,
+) -> float:
+    abstract = str(paper.get("abstract") or "")
+    blob = _paper_blob(paper)
+    study_type_tags = set(classification.get("study_type_tags") or [])
+    personal_relevance = float(classification.get("personal_relevance_score") or 0)
+    matched_keywords = matched_keywords or []
+    core_keyword_hits = sum(
+        1
+        for item in matched_keywords
+        if item.get("group") == "core_keywords"
+        or str(item.get("term") or "").lower()
+        in {
+            "hiit",
+            "hift",
+            "mict",
+            "vo2max",
+            "cardiorespiratory fitness",
+            "sports medicine",
+            "exercise physiology",
+            "rehabilitation",
+            "resistance training",
+            "sleep",
+            "hrv",
+            "semg",
+        }
+    )
+
+    score = 0.0
+    score += min(45.0, result_specificity_score * 0.45)
+    score += min(25.0, personal_relevance * 0.25)
+    score += min(10.0, core_keyword_hits * 2.5)
+
+    if study_type_tags.intersection({"RCT", "系统综述", "Meta分析", "范围综述", "人群队列", "观察性研究", "公开数据库", "动物实验", "机制研究", "多组学"}):
+        score += 10
+    if _extract_numbers(abstract):
+        score += 8
+    if _has_effect_estimate_or_p_value(abstract):
+        score += 8
+    if any(
+        term in blob
+        for term in [
+            "randomized",
+            "cox regression",
+            "regression",
+            "mri",
+            "pcr",
+            "rna-seq",
+            "proteomics",
+            "metabolomics",
+            "atac-seq",
+            "dna methylation",
+            "flow cytometry",
+            "western blot",
+        ]
+    ):
+        score += 6
+
+    if classification.get("demote_reason"):
+        score -= 10 if core_keyword_hits >= 2 and result_specificity_score >= 70 else 30
+    if result_specificity_score < 40:
+        score = min(score, 45)
+    elif result_specificity_score < 50:
+        score = min(score, 60)
+    if personal_relevance < 40 and not classification.get("direction_evidence") and core_keyword_hits < 2:
+        score = min(score, 55)
+    if classification.get("is_elite_journal") and not classification.get("is_elite_radar"):
+        score = min(score, 50)
+    return max(0.0, min(100.0, score))
+
+
+def _presentation_value_reason(
+    paper: dict[str, Any],
+    classification: dict[str, Any],
+    presentation_value_score: float,
+    result_specificity_score: float,
+) -> str:
+    if presentation_value_score >= 75:
+        return "研究问题、方法和结果信息较完整，适合直接发展成组会汇报。"
+    if presentation_value_score >= 55:
+        return "主题有一定汇报价值，但仍需要阅读全文确认方法细节、图表和偏倚风险。"
+    if classification.get("demote_reason"):
+        return str(classification.get("demote_reason"))
+    if result_specificity_score < 50:
+        return "摘要结果信息不足，暂不适合作为组会主讲文献。"
+    return "当前摘要可用信息有限，组会价值需要阅读全文后再判断。"
 
 
 def _results_section(abstract: str) -> str:

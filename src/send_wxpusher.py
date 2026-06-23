@@ -440,6 +440,9 @@ def build_wechat_message(
         "【今日最值得读】",
         overview["top_pick"],
         "",
+        "【今日最适合组会讲】",
+        overview["presentation_pick"],
+        "",
     ]
 
     if papers:
@@ -450,6 +453,7 @@ def build_wechat_message(
             key_result = _paper_key_result(paper)
             practice_value = _paper_practice_value(paper)
             evidence_boundary = _brief_text(paper.get("evidence_strength") or "摘要中未提供。", 150)
+            presentation = _paper_presentation_summary(paper)
             lines.extend(
                 [
                     "————————————",
@@ -477,6 +481,15 @@ def build_wechat_message(
                     "",
                     "【证据边界】",
                     evidence_boundary,
+                    "",
+                    "【组会价值】",
+                    presentation["value"],
+                    "",
+                    "【适合讲什么】",
+                    presentation["talking_point"],
+                    "",
+                    "【PPT 提醒】",
+                    "若要做 PPT，需下载全文 PDF，使用原文 Figure，不可编造图片。",
                     "",
                 ]
             )
@@ -590,6 +603,7 @@ def markdown_to_wechat_text(markdown: str) -> str:
     text = re.sub(r"^##\s+今日概览\s*$", "————————————\n【今日概览】", text, flags=re.MULTILINE)
     text = re.sub(r"^##\s+今日术语小词典\s*$", "————————————\n【术语小词典】", text, flags=re.MULTILINE)
     text = re.sub(r"^##\s+(\d+)\.\s+(.+)$", r"————————————\n【文章 \1】\n\2", text, flags=re.MULTILINE)
+    text = re.sub(r"^###\s+(.+)$", r"【\1】", text, flags=re.MULTILINE)
     text = re.sub(r"^\*\*(.+?)\*\*：", r"\1：", text, flags=re.MULTILINE)
     text = re.sub(r"^\*\*(.+?)\*\*\s*$", r"【\1】", text, flags=re.MULTILINE)
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
@@ -647,8 +661,10 @@ def _build_overview(
             key=lambda item: float(item[1].get("score") or 0),
         )
         top_pick = f"第 {top_index} 篇，原因：{top_paper.get('top_pick_reason') or top_paper.get('one_sentence_conclusion')}"
+        presentation_pick = _presentation_pick_text(papers)
     else:
         top_pick = "今日暂无推荐，当前阈值下没有新文章入选。"
+        presentation_pick = "今日没有特别适合组会精讲的文章。"
 
     return {
         "start_date": start_date,
@@ -657,6 +673,42 @@ def _build_overview(
         "selected_count": len(papers),
         "focus_topics": focus_topics_text,
         "top_pick": top_pick,
+        "presentation_pick": presentation_pick,
+    }
+
+
+def _presentation_pick_text(papers: list[dict[str, Any]]) -> str:
+    best_index, best_paper = max(
+        enumerate(papers, 1),
+        key=lambda item: float(item[1].get("presentation_value_score") or 0),
+    )
+    score = float(best_paper.get("presentation_value_score") or 0)
+    materials = best_paper.get("presentation_materials") or {}
+    if score < 55 or materials.get("suitability") == "不建议":
+        return "今日没有特别适合组会精讲的文章。"
+    reason = (
+        materials.get("core_talking_point")
+        or best_paper.get("presentation_value_reason")
+        or best_paper.get("why_worth_reading")
+        or "研究问题和结果信息相对更适合做组会讲解。"
+    )
+    return f"第 {best_index} 篇，{_brief_text(reason, 150)}"
+
+
+def _paper_presentation_summary(paper: dict[str, Any]) -> dict[str, str]:
+    materials = paper.get("presentation_materials") or {}
+    score = materials.get("score") or paper.get("presentation_value_score") or "未评分"
+    suitability = materials.get("suitability") or "可选"
+    priority = materials.get("priority") or "中"
+    talking_point = (
+        materials.get("core_talking_point")
+        or paper.get("presentation_value_reason")
+        or paper.get("why_worth_reading")
+        or "摘要信息不足，需阅读全文后判断是否适合组会汇报。"
+    )
+    return {
+        "value": f"{suitability}｜优先级：{priority}｜评分：{score}/100",
+        "talking_point": _brief_text(talking_point, 170),
     }
 
 
